@@ -1,0 +1,242 @@
+{
+  "feature": "Feature Name",
+  "description": "Brief description of what this feature does",
+  "completion_promise": "FEATURE_COMPLETE",
+  "created_at": "2024-01-01T00:00:00Z",
+  "spec_reference": "SPEC.md",
+
+  "execution_guidelines": {
+    "mode": "autonomous_end_to_end",
+    "return_to_human": "only_when_fully_complete",
+    "quality_priority": "production_ready_over_speed",
+    "todo_detail_level": "extensive_and_granular",
+    "testing_approach": "sequential_throughout_not_batched",
+    "critical_notes": [
+      "Run /spec-executor skill which counts tasks first",
+      "TODO must have EXACTLY the task count from count_tasks.py",
+      "Update SPEC.md Execution Log every 10 tasks or at phase boundaries"
+    ]
+  },
+
+  "stack": {
+    "runtime": "npm",
+    "framework": "your-framework",
+    "database": "your-database",
+    "styling": "your-styling"
+  },
+
+  "context": {
+    "related_files": [
+      "src/path/to/related/file.ts",
+      "src/path/to/another/file.ts"
+    ],
+    "reusable_components": [
+      "src/components/Button.tsx",
+      "src/components/Modal.tsx"
+    ],
+    "component_directories": [
+      "src/components/",
+      "src/features/"
+    ],
+    "dependencies": [],
+    "env_vars": []
+  },
+
+  "verification_commands": {
+    "typecheck": "npm run typecheck",
+    "lint": "npm run lint",
+    "build": "npm run build",
+    "dev": "npm run dev",
+    "db_sync": "echo 'No database' || your-db-sync-command",
+    "test": "npm test"
+  },
+
+  "phases": [
+    {
+      "id": "phase-0",
+      "name": "Pre-Flight Checks",
+      "description": "Verify environment and dependencies before starting",
+      "status": "pending",
+      "depends_on": [],
+      "tasks": [
+        {
+          "id": "0.1",
+          "task": "Verify development environment is ready",
+          "verification": {
+            "type": "cli",
+            "command": "$verification_commands.typecheck",
+            "success_criteria": "No type errors"
+          }
+        },
+        {
+          "id": "0.2",
+          "task": "Verify existing tests pass",
+          "verification": {
+            "type": "cli",
+            "command": "$verification_commands.test",
+            "success_criteria": "All tests pass"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-1",
+      "name": "Core Implementation",
+      "description": "Implement the main feature functionality",
+      "status": "pending",
+      "depends_on": ["phase-0"],
+      "tasks": [
+        {
+          "id": "1.1",
+          "task": "Create data model / schema",
+          "files": ["src/models/Feature.ts"],
+          "verification": {
+            "type": "cli",
+            "command": "$verification_commands.typecheck",
+            "success_criteria": "No type errors"
+          }
+        },
+        {
+          "id": "1.2",
+          "task": "Implement business logic",
+          "files": ["src/services/featureService.ts"],
+          "verification": {
+            "type": "cli",
+            "command": "$verification_commands.test",
+            "success_criteria": "Unit tests pass"
+          }
+        },
+        {
+          "id": "1.3",
+          "task": "Create API endpoints / functions",
+          "files": ["src/api/feature.ts"],
+          "verification": {
+            "type": "cli",
+            "command": "$verification_commands.build",
+            "success_criteria": "Build succeeds"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-2",
+      "name": "UI Implementation",
+      "description": "Build the user interface components",
+      "status": "pending",
+      "depends_on": ["phase-1"],
+      "tasks": [
+        {
+          "id": "2.1",
+          "task": "Get design guidance",
+          "pre_task": "Run /frontend-design skill",
+          "verification": {
+            "type": "manual",
+            "success_criteria": "Design guidance received"
+          }
+        },
+        {
+          "id": "2.2",
+          "task": "Create main component",
+          "files": ["src/components/FeatureComponent.tsx"],
+          "reuse_check": ["Check component_directories for similar components"],
+          "verification": {
+            "type": "visual",
+            "action": "Component renders correctly",
+            "success_criteria": "No visual errors, matches design"
+          }
+        },
+        {
+          "id": "2.3",
+          "task": "Add interactivity and state management",
+          "files": ["src/components/FeatureComponent.tsx"],
+          "verification": {
+            "type": "visual",
+            "action": "Test all interactions",
+            "success_criteria": "All interactions work as expected"
+          }
+        },
+        {
+          "id": "2.4",
+          "task": "Integrate with API / backend",
+          "files": ["src/components/FeatureComponent.tsx"],
+          "verification": {
+            "type": "e2e",
+            "steps": ["Navigate to feature", "Perform action", "Verify result"],
+            "success_criteria": "Full flow works end-to-end"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-3",
+      "name": "Final Verification",
+      "description": "Complete testing and verification",
+      "status": "pending",
+      "depends_on": ["phase-2"],
+      "tasks": [
+        {
+          "id": "3.1",
+          "task": "Run full test suite",
+          "verification": {
+            "type": "cli",
+            "command": "$verification_commands.test",
+            "success_criteria": "All tests pass"
+          }
+        },
+        {
+          "id": "3.2",
+          "task": "Verify build succeeds",
+          "verification": {
+            "type": "cli",
+            "command": "$verification_commands.build",
+            "success_criteria": "Build completes without errors"
+          }
+        },
+        {
+          "id": "3.3",
+          "task": "Final E2E verification",
+          "verification": {
+            "type": "e2e",
+            "steps": ["Complete user journey", "Verify all functionality"],
+            "success_criteria": "Feature works as specified"
+          }
+        }
+      ]
+    }
+  ],
+
+  "definition_of_done": [
+    "All phases completed with status: completed",
+    "All granular tests passed throughout execution",
+    "TypeScript/type checking passes",
+    "Linting passes",
+    "Build succeeds",
+    "Final verification completed",
+    "No console errors",
+    "No regressions in existing features",
+    "SPEC.md Execution Log updated with final results"
+  ],
+
+  "instructions_for_executor": {
+    "first_action": "Run /spec-executor skill OR run count_tasks.py",
+    "scripts_location": "Find via: dirname $(find ~/.claude -name 'count_tasks.py' -path '*/spec-executor/*' 2>/dev/null | head -1)",
+    "todo_requirements": [
+      "Include ALL tasks from ALL phases",
+      "Each task ID (0.1, 0.2, etc.) = ONE separate TODO item",
+      "TODO count must EXACTLY match count_tasks.py output",
+      "If count doesn't match, recreate TODO before proceeding"
+    ],
+    "during_execution": [
+      "Update TODO status in real-time",
+      "Run verification after each task",
+      "Do not proceed if verification fails",
+      "Update SPEC.md Execution Log every 10 tasks or at phase boundaries"
+    ],
+    "resume_strategy": [
+      "Read SPEC.md Execution Log for last completed task",
+      "Query current state via verification commands",
+      "Recreate TODO from SPEC.json, mark completed tasks"
+    ],
+    "completion": "Only output <promise>FEATURE_COMPLETE</promise> when ALL tasks verified"
+  }
+}
