@@ -1,164 +1,266 @@
-# SPEC Executor - Complete Architecture
+# SPEC Executor - Architecture
+
+Detailed diagrams for the plugin's internals.
+
+---
+
+## Complete Flow
+
+```mermaid
+flowchart TD
+    subgraph INPUT["📥 Input"]
+        SPEC_MD["SPEC.md\n(requirements)"]
+    end
+
+    subgraph PLANNING["🔍 Planning Phase"]
+        READ_SPEC["read-spec skill"]
+        SPEC_JSON["SPEC.json\n(structured)"]
+        READ_SPEC -->|"discovery\n+ interview"| SPEC_JSON
+    end
+
+    subgraph VALIDATION["✅ Validation"]
+        COUNT["count_tasks.py\n→ 75 tasks"]
+        TODO["Claude creates\nTODO (75 items)"]
+        HOOK["validate-todo.sh\n(PostToolUse hook)"]
+        MATCH{{"Count\nmatches?"}}
+        COUNT --> TODO
+        TODO --> HOOK
+        HOOK --> MATCH
+        MATCH -->|No| TODO
+    end
+
+    subgraph EXECUTION["⚡ Execution"]
+        TASKS["Execute tasks\nsequentially"]
+        VERIFY["Verify each\n(typecheck, lint, test)"]
+        TASKS --> VERIFY
+        VERIFY --> TASKS
+    end
+
+    subgraph LOOP["🔄 Loop Phase"]
+        INIT["checkpoint.py init\n--total 40"]
+        UPDATE["checkpoint.py update\n--index N"]
+        EXPAND["Expand TODO\nfor current item"]
+        EXEC_ITEM["Execute\nloop tasks"]
+        COMPLETE["checkpoint.py complete"]
+        CLEAR["checkpoint.py clear"]
+
+        INIT --> UPDATE
+        UPDATE --> EXPAND
+        EXPAND --> EXEC_ITEM
+        EXEC_ITEM --> COMPLETE
+        COMPLETE -->|"More items"| UPDATE
+        COMPLETE -->|"All done"| CLEAR
+    end
+
+    subgraph STORAGE["💾 Persistence"]
+        CP_FILE[".claude/checkpoints/\nspec-name.json"]
+        EXEC_LOG["SPEC.md\nExecution Log"]
+    end
+
+    subgraph RECOVERY["🔄 Recovery"]
+        LOST["Context lost\n(/compact)"]
+        READ_CP["Read checkpoint"]
+        RECREATE["Recreate TODO\nResume position"]
+        LOST --> READ_CP
+        READ_CP --> RECREATE
+    end
+
+    SPEC_MD --> READ_SPEC
+    SPEC_JSON --> COUNT
+    MATCH -->|Yes| TASKS
+    VERIFY -->|"Has loop?"| INIT
+    VERIFY -->|"No loop"| DONE
+    CLEAR --> DONE["✓ Complete"]
+
+    UPDATE -.->|save| CP_FILE
+    COMPLETE -.->|save| CP_FILE
+    TASKS -.->|log| EXEC_LOG
+    CP_FILE -.-> READ_CP
+    RECREATE -.-> UPDATE
+```
+
+---
+
+## The Workflow (Sequence)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant R as read-spec
+    participant S as spec-executor
+    participant H as Hook
+    participant C as Checkpoint
+
+    U->>R: @SPEC.md "read spec"
+    R->>R: Discovery & Interview
+    R->>U: SPEC.json generated
+
+    U->>S: @SPEC.json "execute spec"
+    S->>S: count_tasks.py → 47 tasks
+    S->>S: Create TODO (47 items)
+    H->>H: Validate count
+    H-->>S: ✓ Count matches
+
+    loop For each task
+        S->>S: Execute task
+        S->>S: Mark complete
+        alt Loop phase
+            S->>C: Update checkpoint
+        end
+    end
+
+    S->>U: SPEC EXECUTION COMPLETE
+```
+
+---
+
+## Loop Phase Expansion
 
 ```mermaid
 flowchart TB
-    %% ===== INPUT LAYER =====
-    subgraph INPUT["📥 INPUT"]
-        SPEC_MD["📄 SPEC.md\nHuman-readable requirements"]
+    subgraph SPEC["📋 SPEC.json"]
+        LOOP["phase-2: loop\n• 2.0: Update checkpoint\n• 2.1: Fetch data\n• 2.2: Process item\n• 2.3: Validate"]
     end
 
-    %% ===== PLANNING PHASE =====
-    subgraph PLANNING["🔍 PLANNING PHASE"]
-        READ_SPEC["read-spec skill\n• Discovery\n• Interview\n• Stack detection"]
-        SPEC_JSON["📋 SPEC.json\n• Structured phases\n• Task IDs\n• Verification commands"]
+    subgraph BEFORE["📝 TODO Before Loop"]
+        B1["[ ] 0.1: Setup"]
+        B2["[ ] 1.1: Discovery"]
+        B3["[ ] 2.loop: Process items\n(4 tasks × 40 items)"]
+        B4["[ ] 3.1: Final checks"]
     end
 
-    %% ===== VALIDATION LAYER =====
-    subgraph VALIDATION["✅ VALIDATION LAYER"]
-        COUNT["🔢 count_tasks.py\nCount: 75 tasks"]
-        TODO_CREATE["📝 Claude creates\nTODO (75 items)"]
-        HOOK["🔒 validate-todo.sh\nPostToolUse Hook"]
-        DECISION{{"Count\nmatches?"}}
-        BLOCK["❌ BLOCKED\nRecreate TODO"]
-        PROCEED["✓ Proceed"]
+    subgraph DURING["📝 TODO During Loop (item 5/40)"]
+        D1["[x] 0.x: Setup ✓"]
+        D2["[x] 1.x: Discovery ✓"]
+        D3["[~] 2.loop: (4/40)"]
+        D3a["    [x] 2.0: Checkpoint"]
+        D3b["    [x] 2.1: Fetch"]
+        D3c["    [~] 2.2: Process ←"]
+        D3d["    [ ] 2.3: Validate"]
+        D4["[ ] 3.1: Final checks"]
     end
 
-    %% ===== EXECUTION ENGINE =====
-    subgraph EXECUTION["⚡ EXECUTION ENGINE"]
-        direction TB
-
-        subgraph REGULAR["Regular Tasks"]
-            TASK_R["Execute task\n• Read files\n• Write code\n• Run commands"]
-            VERIFY_R["Verify\n• typecheck\n• lint\n• test"]
-            MARK_R["Mark complete\nUpdate TODO"]
-        end
-
-        subgraph LOOP["Loop Phase (Dynamic)"]
-            INIT_CP["checkpoint.py init\n--total 40"]
-
-            subgraph ITERATION["For each item (1..40)"]
-                UPDATE_CP["checkpoint.py update\n--index N --task 2.x"]
-                EXPAND["Expand TODO\n[5/40] Task 2.0\n[5/40] Task 2.1\n..."]
-                EXEC_LOOP["Execute\nloop tasks"]
-                COMPLETE_CP["checkpoint.py complete\n--index N"]
-            end
-
-            CLEAR_CP["checkpoint.py clear"]
-        end
+    subgraph AFTER["📝 TODO After Loop"]
+        A1["[x] 0.x: Setup ✓"]
+        A2["[x] 1.x: Discovery ✓"]
+        A3["[x] 2.loop: (40/40) ✓"]
+        A4["[ ] 3.1: Final checks"]
     end
 
-    %% ===== PERSISTENCE LAYER =====
-    subgraph STORAGE["💾 PERSISTENCE"]
-        CP_FILE[(".claude/checkpoints/\nspec-name.json\n{\n  current_index: 15\n  current_task: 2.3\n  completed_items: [...]\n}")]
-        EXEC_LOG["SPEC.md\nExecution Log\n• Decisions\n• Findings\n• Progress"]
-    end
-
-    %% ===== RECOVERY SYSTEM =====
-    subgraph RECOVERY["🔄 RECOVERY (after /compact)"]
-        CONTEXT_LOST["😵 Context Lost\nClaude forgets everything"]
-        READ_CP["Read checkpoint\n→ Position restored"]
-        READ_LOG["Read Execution Log\n→ History restored"]
-        RECREATE["Recreate TODO\n• Mark completed\n• Resume from position"]
-    end
-
-    %% ===== OUTPUT =====
-    subgraph OUTPUT["📤 OUTPUT"]
-        COMPLETE["🎉 SPEC COMPLETE\n<promise>FEATURE_DONE</promise>"]
-    end
-
-    %% ===== CONNECTIONS =====
-
-    %% Input to Planning
-    SPEC_MD --> READ_SPEC
-    READ_SPEC --> SPEC_JSON
-
-    %% Planning to Validation
-    SPEC_JSON --> COUNT
-    COUNT --> TODO_CREATE
-    TODO_CREATE --> HOOK
-    HOOK --> DECISION
-    DECISION -->|No| BLOCK
-    BLOCK --> TODO_CREATE
-    DECISION -->|Yes| PROCEED
-
-    %% Validation to Execution
-    PROCEED --> TASK_R
-    TASK_R --> VERIFY_R
-    VERIFY_R --> MARK_R
-    MARK_R -->|"Has loop?"| INIT_CP
-    MARK_R -->|"No loop"| COMPLETE
-
-    %% Loop execution
-    INIT_CP --> UPDATE_CP
-    UPDATE_CP --> EXPAND
-    EXPAND --> EXEC_LOOP
-    EXEC_LOOP --> COMPLETE_CP
-    COMPLETE_CP -->|"More items?"| UPDATE_CP
-    COMPLETE_CP -->|"All done"| CLEAR_CP
-    CLEAR_CP --> COMPLETE
-
-    %% Persistence connections
-    UPDATE_CP -.->|"Save"| CP_FILE
-    COMPLETE_CP -.->|"Save"| CP_FILE
-    MARK_R -.->|"Log"| EXEC_LOG
-
-    %% Recovery connections
-    CONTEXT_LOST -.->|"/compact"| READ_CP
-    CP_FILE -.-> READ_CP
-    EXEC_LOG -.-> READ_LOG
-    READ_CP --> RECREATE
-    READ_LOG --> RECREATE
-    RECREATE -->|"Continue"| UPDATE_CP
-
-    %% Styling
-    style SPEC_MD fill:#e1f5fe
-    style SPEC_JSON fill:#e8f5e9
-    style HOOK fill:#fff3e0
-    style BLOCK fill:#ffcdd2
-    style PROCEED fill:#c8e6c9
-    style CP_FILE fill:#f3e5f5
-    style COMPLETE fill:#c8e6c9
-    style CONTEXT_LOST fill:#ffcdd2
-    style RECREATE fill:#fff9c4
-
-    %% Subgraph styling
-    style INPUT fill:#e3f2fd,stroke:#1976d2
-    style PLANNING fill:#e8f5e9,stroke:#388e3c
-    style VALIDATION fill:#fff3e0,stroke:#f57c00
-    style EXECUTION fill:#fce4ec,stroke:#c2185b
-    style STORAGE fill:#f3e5f5,stroke:#7b1fa2
-    style RECOVERY fill:#fff8e1,stroke:#ffa000
-    style OUTPUT fill:#e8f5e9,stroke:#388e3c
+    SPEC --> BEFORE
+    BEFORE -->|"Enter loop"| DURING
+    DURING -->|"Complete all 40"| AFTER
 ```
+
+---
+
+## TODO Validation Hook
+
+```mermaid
+flowchart LR
+    A["count_tasks.py"] -->|"75 tasks"| B["Expected: 75"]
+    C["TodoWrite"] -->|"73 items"| D["Actual: 73"]
+    B --> E{{"Match?"}}
+    D --> E
+    E -->|No| F["❌ BLOCKED"]
+    E -->|Yes| G["✓ Proceed"]
+    F -->|Recreate| C
+```
+
+---
+
+## Checkpoint State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Initialized: init --total 40
+
+    Initialized --> Processing: update --index 0
+    Processing --> ItemComplete: complete --index N
+    ItemComplete --> Processing: update --index N+1
+
+    ItemComplete --> Cleared: All done
+    Cleared --> [*]: clear
+
+    Processing --> Resumed: /compact
+    Resumed --> Processing: read → resume
+```
+
+---
+
+## Recovery Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Claude
+    participant S as SPEC.json
+    participant P as checkpoint.py
+    participant F as Checkpoint File
+
+    Note over C: Context full, /compact triggered
+    C->>C: Context reset 😵
+
+    Note over C: Recovery begins
+    C->>S: Read SPEC.json
+    C->>P: checkpoint.py read
+    P->>F: Load .claude/checkpoints/
+    F-->>P: {current_index: 15, current_task: "2.3"}
+    P-->>C: Position restored
+
+    Note over C: Resume from task 16
+    C->>C: Recreate TODO
+    C->>C: Mark 1-15 complete
+    C->>C: Continue from 16 ✓
+```
+
+---
+
+## Component Roles
+
+```mermaid
+flowchart TB
+    subgraph Skills["🎯 Skills"]
+        FD["frontend-design\nUI guidance"]
+        RS["read-spec\nSPEC.md → JSON"]
+        SE["spec-executor\nExecution engine"]
+    end
+
+    subgraph Scripts["🔧 Scripts"]
+        CT["count_tasks.py\nCount & validate"]
+        CP["checkpoint.py\nLoop persistence"]
+        GT["generate-todo.py\nTODO helper"]
+    end
+
+    subgraph Hooks["🔒 Hooks"]
+        VT["validate-todo.sh\nEnforce count"]
+    end
+
+    subgraph Storage["💾 Storage"]
+        JSON["SPEC.json"]
+        CHK["checkpoints/"]
+        LOG["Execution Log"]
+    end
+
+    RS --> JSON
+    SE --> CT
+    CT --> VT
+    SE --> CP
+    CP --> CHK
+    SE --> LOG
+    GT --> CHK
+```
+
+---
 
 ## Legend
 
 | Symbol | Meaning |
 |--------|---------|
-| 📄 | Human-readable file |
-| 📋 | Structured JSON |
-| 🔢 | Script |
-| 📝 | TODO list |
-| 🔒 | Hook (automatic validation) |
+| 📥 | Input |
+| 🔍 | Planning/Discovery |
+| ✅ | Validation |
 | ⚡ | Execution |
+| 🔄 | Loop/Recovery |
 | 💾 | Persistence |
-| 🔄 | Recovery |
 | ✓ | Success |
 | ❌ | Blocked |
-
-## Key Flows
-
-### 1. Normal Execution (No Loops)
-```
-SPEC.md → read-spec → SPEC.json → count → TODO → hook ✓ → execute → complete
-```
-
-### 2. Loop Execution
-```
-... → enter loop → init checkpoint → [update → expand → execute → complete] × N → clear → ...
-```
-
-### 3. Recovery After /compact
-```
-context lost → read checkpoint → read log → recreate TODO → resume from saved position
-```
