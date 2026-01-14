@@ -39,7 +39,11 @@ sudo apt install jq
 ### Install Plugin
 
 ```bash
-claude plugin install github:Girolino/claude-spec-executor --scope user
+# Clone the repo
+git clone https://github.com/Girolino/claude-spec-executor.git
+
+# Install to user scope (available in all projects)
+claude plugin install ./claude-spec-executor --scope user
 ```
 
 ---
