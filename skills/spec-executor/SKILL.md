@@ -134,17 +134,36 @@ After hook validation passes (no error message), begin executing tasks sequentia
 
 **CRITICAL**: The TODO must be created BEFORE any execution starts. Not incrementally. Not lazily. ALL items UPFRONT in a SINGLE TodoWrite call.
 
-## Automatic Hook Validation
+## Automatic Hook Validation (Continuous)
 
-A PostToolUse hook runs after every TodoWrite call and:
+A PostToolUse hook runs after **EVERY** TodoWrite call throughout execution:
+
+### Phase 1: Initial Count Validation
 1. Reads expected count from `/tmp/claude-expected-todo-count`
-2. Counts actual TODO items created
-3. If mismatch: **BLOCKS** with error message
-4. If match: Passes silently and clears the expectation file
+2. If mismatch: **BLOCKS** with error message
+3. If match: Creates `.claude/todo-canonical.json` as reference
 
-**If you see this error:**
+### Phase 2: Continuous Structure Validation
+After the initial TODO is created, the hook validates **every subsequent TodoWrite**:
+1. Compares against `.claude/todo-canonical.json`
+2. **Allows**: Status changes (pending → in_progress → completed)
+3. **Allows**: Phase collapse with proper markers (e.g., `0.x: Pre-Flight ✓`)
+4. **BLOCKS**: Task removal without proper collapse
+5. **BLOCKS**: Reducing task count without justification
+
+### Why This Matters
+Without continuous validation, Claude tends to "drift" during long executions:
+- Collapsing tasks to "simplify" the TODO
+- Removing completed tasks entirely
+- Grouping multiple tasks into one
+
+The canonical file persists on disk and survives `/compact`, ensuring structure is preserved.
+
+### If Validation Fails
+
+**Count mismatch (initial):**
 ```
-=== TODO VALIDATION FAILED ===
+=== TODO COUNT VALIDATION FAILED ===
 Expected: 22 items
 Actual: 7 items
 
@@ -153,7 +172,25 @@ Do NOT proceed until counts match.
 ===============================
 ```
 
-**Action required**: Delete the TODO and recreate with ALL tasks. The hook will re-validate automatically.
+**Structure mismatch (during execution):**
+```
+=== TODO VALIDATION FAILED ===
+
+Task removal not allowed. Missing: ['2.3', '2.4', '2.5']
+
+TO RECOVER, regenerate the TODO from SPEC:
+
+  # Option 1: Use generate-todo.py
+  python3 $SCRIPTS/generate-todo.py --spec SPEC.json --base --format json
+
+  # Option 2: Read canonical directly
+  cat .claude/todo-canonical.json
+
+Then recreate TodoWrite with ALL original task IDs.
+===============================
+```
+
+**Action required**: Regenerate TODO from SPEC.json or read the canonical file, then recreate with ALL task IDs.
 
 ## TODO Creation Rules
 
@@ -250,6 +287,28 @@ This enables session resumption if interrupted.
 | SPEC.md | Execution Log, decisions, findings | Every 10 tasks / phase boundary |
 | TODO | Granular progress tracking | After every task |
 | Checkpoint | Loop state for /compact recovery | Every loop iteration |
+| **todo-canonical.json** | **Reference for TODO validation** | **Created once, never modified** |
+
+### Canonical TODO (.claude/todo-canonical.json)
+
+This file is created automatically on the first TodoWrite and serves as the **immutable reference** for all subsequent validations.
+
+**Structure:**
+```json
+{
+  "created_at": "2024-01-15T10:30:00Z",
+  "spec_file": "SPEC.json",
+  "task_count": 22,
+  "task_ids": ["0.1", "0.2", "1.1", ...],
+  "todos": [...]
+}
+```
+
+**Rules:**
+- Created once when TODO is first written
+- Never modified during execution
+- Survives `/compact`
+- Cleared only when `checkpoint.py clear` is called (execution complete)
 
 ## Checkpoint Pattern for Loops
 
@@ -466,24 +525,68 @@ Verification Phase:
 
 If session interrupted (including after `/compact`):
 
+### Step 1: Check What Persisted on Disk
+
+```bash
+# Check for canonical TODO (your reference)
+cat .claude/todo-canonical.json
+
+# Check for active checkpoint (loop state)
+ls -la .claude/checkpoints/
+
+# Read checkpoint if exists
+python3 $SCRIPTS/checkpoint.py read <spec-name>
+```
+
+### Step 2: Regenerate TODO Structure
+
+**IMPORTANT**: The validation hook will BLOCK any TODO that doesn't match the canonical structure.
+
+```bash
+# Option A: Generate from SPEC (recommended)
+python3 $SCRIPTS/generate-todo.py --spec SPEC.json --base --format json
+
+# Option B: If in a loop, generate with checkpoint context
+python3 $SCRIPTS/generate-todo.py --spec SPEC.json --checkpoint <spec-name> --format json
+```
+
+### Step 3: Recreate TODO with Correct Status
+
+Use the output from generate-todo.py, but update statuses based on:
+1. SPEC.md Execution Log (what was completed)
+2. Checkpoint data (loop position)
+3. Verification commands (actual state)
+
 ### For SPECs WITHOUT loops:
-1. Run `count_tasks.py SPEC.json` to get total
-2. Read SPEC.md Execution Log for last completed phase/task
-3. Query current state using project's verification commands
-4. Recreate TODO from SPEC.json
-5. Mark completed tasks as `completed`
-6. Resume from next incomplete task
+1. Read `.claude/todo-canonical.json` for original structure
+2. Read SPEC.md Execution Log for last completed task
+3. Recreate TODO with original structure
+4. Mark completed tasks as `completed`
+5. Resume from next incomplete task
 
 ### For SPECs WITH loops (checkpoint-enabled):
-1. **First**: Read checkpoint file
-   ```bash
-   python3 $SCRIPTS/checkpoint.py read <spec-name>
-   ```
+1. Read checkpoint: `checkpoint.py read <spec-name>`
 2. Note `current_index`, `current_task`, and `completed_items`
-3. Recreate TODO from SPEC.json
-4. Mark pre-loop tasks as completed (Phase 0, 1)
-5. For loop phase: skip items in `completed_items`
-6. Resume at `current_index` from `current_task`
+3. Generate TODO: `generate-todo.py --spec SPEC.json --checkpoint <spec-name>`
+4. Recreate TODO with expanded loop tasks for current item
+5. Resume at `current_index` from `current_task`
+
+### Recovery Example
+
+```bash
+# 1. Check state
+python3 $SCRIPTS/checkpoint.py read my-feature
+# Output: current_index=15, current_task=2.3, completed=15/40
+
+# 2. Generate correct TODO
+python3 $SCRIPTS/generate-todo.py \
+  --spec SPEC.json \
+  --checkpoint my-feature \
+  --format preview
+
+# 3. Recreate TODO with TodoWrite using the generated structure
+# Hook will validate it matches canonical
+```
 
 ## Validation Checkpoints
 

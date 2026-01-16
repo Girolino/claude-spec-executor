@@ -209,8 +209,8 @@ def fail_item(spec_name: str, index: int, item_id: str | None = None, reason: st
     return checkpoint
 
 
-def clear_checkpoint(spec_name: str):
-    """Clear/delete a checkpoint file."""
+def clear_checkpoint(spec_name: str, clear_canonical: bool = True):
+    """Clear/delete a checkpoint file and optionally the canonical TODO."""
     path = get_checkpoint_path(spec_name)
 
     if path.exists():
@@ -218,6 +218,13 @@ def clear_checkpoint(spec_name: str):
         print(f"Checkpoint cleared: {path}")
     else:
         print(f"No checkpoint to clear for: {spec_name}")
+
+    # Also clear canonical TODO file if requested
+    if clear_canonical:
+        canonical_path = Path(".claude/todo-canonical.json")
+        if canonical_path.exists():
+            canonical_path.unlink()
+            print(f"Canonical TODO cleared: {canonical_path}")
 
 
 def main():
@@ -259,6 +266,8 @@ def main():
     # clear
     clear_parser = subparsers.add_parser('clear', help='Clear checkpoint')
     clear_parser.add_argument('spec_name', help='Name of the SPEC')
+    clear_parser.add_argument('--keep-canonical', action='store_true',
+                              help='Keep the canonical TODO file (default: clear it)')
 
     args = parser.parse_args()
 
@@ -276,7 +285,7 @@ def main():
     elif args.command == 'fail':
         fail_item(args.spec_name, args.index, args.item_id, args.reason)
     elif args.command == 'clear':
-        clear_checkpoint(args.spec_name)
+        clear_checkpoint(args.spec_name, clear_canonical=not args.keep_canonical)
     else:
         parser.print_help()
         sys.exit(1)
