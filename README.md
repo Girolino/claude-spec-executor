@@ -43,9 +43,18 @@ claude plugin install spec-executor@claude-spec-executor --scope user
 # Update marketplace cache
 claude plugin marketplace update claude-spec-executor
 
-# Reinstall plugin
+# Update plugin
 claude plugin update spec-executor@claude-spec-executor
 ```
+
+### Enable Auto-Update (Recommended)
+
+To receive updates automatically on Claude Code startup:
+
+1. Run `/plugin` in Claude Code
+2. Go to **Marketplaces** tab
+3. Select **claude-spec-executor**
+4. Click **Enable auto-update**
 
 ### Alternative: Install from Local Clone
 
