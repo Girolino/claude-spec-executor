@@ -285,33 +285,30 @@ def main():
             output_block(canonical["_error"])
             return
 
-        # Check if we're in SPEC execution mode
-        # SPEC mode = canonical has expected_count (set by Layer 1 validation)
-        spec_mode = canonical.get("expected_count") is not None
+        # Check for completely different work context (zero overlap in task IDs)
+        # This check comes FIRST and overrides everything - if task IDs are
+        # completely different, it's clearly a new context (new SPEC or new work)
+        original_ids = set(canonical.get("task_ids", []))
+        new_ids = extract_task_ids(todos)
+        overlap = original_ids & new_ids
 
-        if not spec_mode:
-            # Not in SPEC mode - check for fresh start conditions
-            # This allows overwriting old canonical from different work context
-            original_ids = set(canonical.get("task_ids", []))
-            new_ids = extract_task_ids(todos)
-            overlap = original_ids & new_ids
+        is_different_work = (
+            (len(overlap) == 0 and len(original_ids) > 0 and len(new_ids) > 0) or
+            (len(original_ids) == 0)  # Can't validate if no IDs to compare
+        )
 
-            # Fresh start if:
-            # 1. Zero overlap between old and new IDs (both have IDs), or
-            # 2. Old canonical has no task IDs (can't validate structure)
-            is_fresh_start = (
-                (len(overlap) == 0 and len(original_ids) > 0 and len(new_ids) > 0) or
-                (len(original_ids) == 0)
+        if is_different_work:
+            # Different work context - replace canonical regardless of SPEC mode
+            save_canonical(project_dir, todos)
+            output_allow(
+                "canonical_replaced_different_context",
+                task_count=len(todos),
+                previous_count=canonical.get("task_count", 0)
             )
+            return
 
-            if is_fresh_start:
-                save_canonical(project_dir, todos)
-                output_allow(
-                    "canonical_replaced_fresh_start",
-                    task_count=len(todos),
-                    previous_count=canonical.get("task_count", 0)
-                )
-                return
+        # Same work context - validate structure
+        # SPEC mode (expected_count set) requires all original tasks present
 
         is_valid, error_message = validate_against_canonical(todos, canonical)
 
