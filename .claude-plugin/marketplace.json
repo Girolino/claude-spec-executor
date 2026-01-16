@@ -1,0 +1,27 @@
+{
+  "name": "claude-spec-executor",
+  "owner": {
+    "name": "Fernando Maluf",
+    "email": "fernando@girolino.com"
+  },
+  "metadata": {
+    "description": "Autonomous execution of long-running tasks with TODO tracking and checkpoint recovery",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "spec-executor",
+      "source": "./",
+      "description": "Autonomous execution of long-running tasks with TODO tracking and checkpoint recovery",
+      "version": "1.0.0",
+      "author": {
+        "name": "Fernando Maluf"
+      },
+      "homepage": "https://github.com/Girolino/claude-spec-executor",
+      "repository": "https://github.com/Girolino/claude-spec-executor",
+      "license": "MIT",
+      "keywords": ["spec", "execution", "autonomous", "todo", "checkpoint", "long-running"],
+      "category": "productivity"
+    }
+  ]
+}
