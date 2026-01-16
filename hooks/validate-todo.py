@@ -2,16 +2,18 @@
 """
 PostToolUse hook for TodoWrite validation.
 
-Ensures TODO integrity during long SPEC executions by:
-1. Saving a "canonical" TODO on first write
-2. Validating all subsequent writes against the canonical
-3. Allowing status changes but blocking task removal
+VALIDATION LAYERS (in order):
+1. Expected count file (/tmp/claude-expected-todo-count) - explicit expectation
+2. Auto-discovery of SPEC.json - counts tasks automatically (AGNOSTIC)
+3. Canonical file validation - ensures structure consistency
+4. Implicit canonical - for non-SPEC TodoWrite usage
+
+This hook is AGNOSTIC - it doesn't depend on the LLM following instructions.
+If a SPEC.json exists in the project, validation is MANDATORY.
 
 Usage: Automatically triggered by Claude Code after TodoWrite calls
 Input: JSON from stdin with tool_input.todos
 Output: JSON with decision (allow/block) and reason
-
-Canonical file: .claude/todo-canonical.json
 """
 
 import json
@@ -20,15 +22,20 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Import shared utilities (same directory)
+try:
+    from spec_utils import find_spec_file, count_spec_tasks
+except ImportError:
+    # Fallback if running standalone
+    sys.path.insert(0, str(Path(__file__).parent))
+    from spec_utils import find_spec_file, count_spec_tasks
+
 
 def get_project_dir() -> Path:
     """Get project directory from environment or current working directory."""
-    # Try environment variable first
     project_dir = os.environ.get("CLAUDE_PROJECT_DIR")
     if project_dir:
         return Path(project_dir)
-
-    # Fall back to cwd from hook input (set later) or current directory
     return Path.cwd()
 
 
@@ -45,24 +52,13 @@ def extract_task_id(content: str) -> str | None:
         "0.1: Verify environment" -> "0.1"
         "  2.3: [5/40] Process item" -> "2.3"
         "1.x: Phase completed" -> "1.x"
-        "phase-2: Loop (5/40)" -> "phase-2"
     """
-    content = content.strip()
+    content = content.strip().lstrip(" \t")
 
-    # Remove leading whitespace/indentation markers
-    content = content.lstrip(" \t")
-
-    # Pattern: "X.Y: description" or "X.x: description" or "phase-N: description"
     if ":" in content:
         prefix = content.split(":")[0].strip()
-        # Valid task IDs: "0.1", "2.10", "1.x", "phase-2"
-        if prefix and (
-            "." in prefix or
-            prefix.startswith("phase-") or
-            prefix[0].isdigit()
-        ):
+        if prefix and ("." in prefix or prefix[0].isdigit()):
             return prefix
-
     return None
 
 
@@ -78,50 +74,21 @@ def extract_task_ids(todos: list[dict]) -> set[str]:
 
 
 def is_collapsed_phase(content: str) -> bool:
-    """
-    Check if a TODO item is a collapsed phase summary.
-
-    Examples:
-        "0.x: Pre-Flight completed" -> True
-        "1.x: Discovery (5/5) ✓" -> True
-        "2.loop: Process items (5/40)" -> True
-        "0.1: Verify environment" -> False
-    """
-    content = content.strip()
-
-    # Patterns for collapsed phases
-    if ".x:" in content.lower():
-        return True
-    if ".loop:" in content.lower():
-        return True
-    if "completed" in content.lower() and "✓" in content:
-        return True
-
-    return False
-
-
-def normalize_task_id(task_id: str) -> str:
-    """
-    Normalize task ID for comparison.
-
-    Handles collapsed phases like "0.x" which represent "0.1", "0.2", etc.
-    """
-    return task_id.lower().strip()
+    """Check if a TODO item is a collapsed phase summary."""
+    content = content.strip().lower()
+    return ".x:" in content or ".loop:" in content or ("completed" in content and "✓" in content)
 
 
 def get_phase_number(task_id: str) -> str | None:
     """Extract phase number from task ID."""
     if "." in task_id:
         return task_id.split(".")[0]
-    if task_id.startswith("phase-"):
-        return task_id.replace("phase-", "")
     return None
 
 
 def load_canonical(project_dir: Path) -> dict | None:
     """Load canonical TODO if it exists."""
     canonical_path = get_canonical_path(project_dir)
-
     if not canonical_path.exists():
         return None
 
@@ -132,33 +99,14 @@ def load_canonical(project_dir: Path) -> dict | None:
         return {"_error": f"Failed to read canonical: {e}"}
 
 
-def find_spec_file(project_dir: Path) -> str | None:
-    """Try to find SPEC.json in common locations."""
-    candidates = [
-        project_dir / "SPEC.json",
-        project_dir / "spec.json",
-        project_dir / ".claude" / "SPEC.json",
-    ]
-
-    # Also check for any .json file with "spec" in the name
-    for json_file in project_dir.glob("**/SPEC*.json"):
-        if json_file.is_file():
-            return str(json_file.relative_to(project_dir))
-
-    for candidate in candidates:
-        if candidate.exists():
-            return str(candidate.relative_to(project_dir))
-
-    return None
-
-
-def save_canonical(project_dir: Path, todos: list[dict], spec_file: str | None = None) -> bool:
+def save_canonical(
+    project_dir: Path,
+    todos: list[dict],
+    spec_file: str | None = None,
+    expected_count: int | None = None
+) -> bool:
     """Save TODO as canonical reference."""
     canonical_path = get_canonical_path(project_dir)
-
-    # Try to find spec file if not provided
-    if spec_file is None:
-        spec_file = find_spec_file(project_dir)
 
     try:
         canonical_path.parent.mkdir(parents=True, exist_ok=True)
@@ -172,6 +120,7 @@ def save_canonical(project_dir: Path, todos: list[dict], spec_file: str | None =
         canonical = {
             "created_at": datetime.now(timezone.utc).isoformat(),
             "spec_file": spec_file,
+            "expected_count": expected_count or len(todos),
             "task_count": len(todos),
             "task_ids": task_ids,
             "todos": todos
@@ -186,14 +135,7 @@ def save_canonical(project_dir: Path, todos: list[dict], spec_file: str | None =
         return False
 
 
-def clear_canonical(project_dir: Path) -> None:
-    """Clear canonical file (called when spec execution completes)."""
-    canonical_path = get_canonical_path(project_dir)
-    if canonical_path.exists():
-        canonical_path.unlink()
-
-
-def validate_todos(
+def validate_against_canonical(
     new_todos: list[dict],
     canonical: dict
 ) -> tuple[bool, str]:
@@ -205,14 +147,10 @@ def validate_todos(
     2. Status changes are allowed
     3. New tasks can be added (for loop expansion)
     4. Task removal is blocked
-
-    Returns: (is_valid, error_message)
     """
     original_ids = set(canonical.get("task_ids", []))
     new_ids = extract_task_ids(new_todos)
 
-    # Check for removed tasks
-    # But allow collapsed phases (e.g., "0.x" can replace "0.1", "0.2", "0.3")
     missing_ids = set()
     collapsed_phases = set()
 
@@ -229,16 +167,11 @@ def validate_todos(
     # Check each original ID
     for orig_id in original_ids:
         if orig_id in new_ids:
-            continue  # Present, OK
+            continue
 
-        # Check if this task's phase is collapsed
         phase_num = get_phase_number(orig_id)
-        if phase_num and phase_num in collapsed_phases:
-            continue  # Collapsed into phase summary, OK
-
-        # Check if there's a matching .x collapse
-        if phase_num and f"{phase_num}.x" in new_ids:
-            continue  # Collapsed, OK
+        if phase_num and (phase_num in collapsed_phases or f"{phase_num}.x" in new_ids):
+            continue
 
         missing_ids.add(orig_id)
 
@@ -250,7 +183,6 @@ def validate_todos(
         return False, f"Task removal not allowed. Missing: {sorted_missing}"
 
     # Validate count hasn't decreased unexpectedly
-    # (allow decrease only if phases are properly collapsed)
     original_count = canonical.get("task_count", 0)
     new_count = len(new_todos)
 
@@ -263,15 +195,16 @@ def validate_todos(
     return True, ""
 
 
-def check_expected_count(new_todos: list[dict]) -> tuple[bool, str]:
+def check_expected_count_file(new_todos: list[dict]) -> tuple[bool, str, int | None]:
     """
-    Check against expected count file (for initial validation).
-    This is the original behavior from validate-todo.sh.
+    Check against expected count file (explicit expectation).
+
+    Returns: (is_valid, message, expected_count_if_matched)
     """
     expected_file = Path("/tmp/claude-expected-todo-count")
 
     if not expected_file.exists():
-        return True, ""
+        return True, "", None
 
     try:
         expected_count = int(expected_file.read_text().strip())
@@ -280,19 +213,123 @@ def check_expected_count(new_todos: list[dict]) -> tuple[bool, str]:
         if actual_count != expected_count:
             return False, (
                 f"=== TODO COUNT VALIDATION FAILED ===\n"
-                f"Expected: {expected_count} items\n"
+                f"Expected: {expected_count} items (from explicit expectation)\n"
                 f"Actual: {actual_count} items\n\n"
                 f"You MUST recreate the TODO with EXACTLY {expected_count} items.\n"
-                f"Do NOT proceed until counts match.\n"
+                f"Each task ID (0.1, 0.2, 1.1, etc.) must be a SEPARATE TODO item.\n"
+                f"Do NOT group tasks by phase or combine multiple tasks.\n"
                 f"====================================="
-            )
+            ), None
 
-        # Count matched - remove expectation file and save as canonical
+        # Count matched - remove expectation file
         expected_file.unlink()
-        return True, "count_validated"
+        return True, "count_validated", expected_count
 
     except (ValueError, IOError):
-        return True, ""
+        return True, "", None
+
+
+def looks_like_spec_execution(todos: list[dict]) -> bool:
+    """
+    Check if the TODO looks like a SPEC execution.
+
+    A SPEC execution TODO has task IDs in format "X.Y: description".
+    Regular TODOs don't follow this pattern.
+
+    This prevents false positives when a project has SPEC.json
+    but the user is just using normal TODO tracking.
+    """
+    spec_pattern_count = 0
+    for todo in todos:
+        content = todo.get("content", "").strip()
+        # Check for pattern: "X.Y: " where X and Y are numbers
+        if ":" in content:
+            prefix = content.split(":")[0].strip()
+            # Valid SPEC task ID: "0.1", "2.10", "13.15", etc.
+            if "." in prefix:
+                parts = prefix.split(".")
+                if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                    spec_pattern_count += 1
+
+    # Consider it a SPEC execution if >50% of items match the pattern
+    # or if there are at least 5 matching items
+    total = len(todos)
+    if total == 0:
+        return False
+
+    return spec_pattern_count >= 5 or (spec_pattern_count / total) > 0.5
+
+
+def check_spec_auto_discovery(
+    new_todos: list[dict],
+    project_dir: Path
+) -> tuple[bool, str, Path | None, int | None]:
+    """
+    Auto-discover SPEC.json and validate task count.
+
+    This makes the hook AGNOSTIC - it doesn't depend on the LLM
+    following instructions to run count_tasks.py first.
+
+    IMPORTANT: Only validates if the TODO looks like a SPEC execution
+    (has task IDs in X.Y format). This prevents blocking normal TODO usage.
+
+    Returns: (is_valid, message, spec_path, expected_count)
+    """
+    # First check if this looks like a SPEC execution
+    if not looks_like_spec_execution(new_todos):
+        return True, "", None, None
+
+    spec_path = find_spec_file(project_dir)
+
+    if spec_path is None:
+        return True, "", None, None
+
+    result = count_spec_tasks(spec_path)
+    if result is None:
+        return True, "", None, None
+
+    expected_count, _ = result
+    actual_count = len(new_todos)
+
+    if actual_count != expected_count:
+        # Build helpful error message
+        spec_rel_path = spec_path.relative_to(project_dir) if spec_path.is_relative_to(project_dir) else spec_path
+
+        return False, (
+            f"=== TODO COUNT VALIDATION FAILED ===\n"
+            f"SPEC file: {spec_rel_path}\n"
+            f"Expected: {expected_count} items (auto-counted from SPEC)\n"
+            f"Actual: {actual_count} items\n\n"
+            f"CRITICAL: When a SPEC.json exists, TODO must match EXACTLY.\n\n"
+            f"Each task ID from the SPEC must be a SEPARATE TODO item:\n"
+            f"  GOOD: '0.1: Verify environment'\n"
+            f"  GOOD: '0.2: Check dependencies'\n"
+            f"  BAD:  'Phase 0: Setup (5 tasks)'\n"
+            f"  BAD:  '0.1-0.5: Setup tasks'\n\n"
+            f"TO FIX:\n"
+            f"  1. Run: python3 $SCRIPTS/count_tasks.py {spec_rel_path} -v\n"
+            f"  2. Create TODO with ALL {expected_count} task IDs listed\n"
+            f"  3. Each task ID = ONE separate TODO item\n"
+            f"====================================="
+        ), spec_path, expected_count
+
+    return True, "spec_validated", spec_path, expected_count
+
+
+def output_block(reason: str) -> None:
+    """Output a blocking decision."""
+    print(json.dumps({
+        "decision": "block",
+        "reason": reason
+    }))
+
+
+def output_allow(status: str, **kwargs) -> None:
+    """Output an allow decision (to stderr for debugging)."""
+    print(json.dumps({
+        "status": status,
+        **kwargs
+    }), file=sys.stderr)
 
 
 def main():
@@ -300,10 +337,7 @@ def main():
     try:
         hook_input = json.load(sys.stdin)
     except json.JSONDecodeError as e:
-        print(json.dumps({
-            "decision": "block",
-            "reason": f"Invalid hook input JSON: {e}"
-        }))
+        output_block(f"Invalid hook input JSON: {e}")
         return
 
     # Verify this is a TodoWrite call
@@ -321,76 +355,74 @@ def main():
     if not todos:
         return  # Empty TODO, allow
 
-    # PART 1: Check expected count (initial validation)
-    is_valid, message = check_expected_count(todos)
+    # =========================================
+    # LAYER 1: Check explicit expected count
+    # =========================================
+    is_valid, message, expected_count = check_expected_count_file(todos)
 
     if not is_valid:
-        print(json.dumps({
-            "decision": "block",
-            "reason": message
-        }))
+        output_block(message)
         return
 
-    # If count was just validated, save as canonical
     if message == "count_validated":
-        save_canonical(project_dir, todos)
-        print(json.dumps({
-            "status": "canonical_created",
-            "task_count": len(todos)
-        }), file=sys.stderr)
+        # Explicit count matched - find spec for metadata
+        spec_path = find_spec_file(project_dir)
+        spec_file = str(spec_path.relative_to(project_dir)) if spec_path else None
+        save_canonical(project_dir, todos, spec_file, expected_count)
+        output_allow("canonical_created_explicit", task_count=len(todos))
         return
 
-    # PART 2: Validate against canonical (continuous validation)
+    # =========================================
+    # LAYER 2: Auto-discover and validate SPEC
+    # =========================================
+    is_valid, message, spec_path, expected_count = check_spec_auto_discovery(todos, project_dir)
+
+    if not is_valid:
+        output_block(message)
+        return
+
+    if message == "spec_validated":
+        # SPEC auto-validation passed - save canonical
+        spec_file = str(spec_path.relative_to(project_dir)) if spec_path else None
+        save_canonical(project_dir, todos, spec_file, expected_count)
+        output_allow("canonical_created_auto", task_count=len(todos), spec_file=spec_file)
+        return
+
+    # =========================================
+    # LAYER 3: Validate against existing canonical
+    # =========================================
     canonical = load_canonical(project_dir)
 
-    if canonical is None:
-        # No canonical exists and no expected count - save this as canonical
-        # This handles cases where spec-executor wasn't used
-        save_canonical(project_dir, todos)
-        print(json.dumps({
-            "status": "canonical_created_implicit",
-            "task_count": len(todos)
-        }), file=sys.stderr)
-        return
+    if canonical is not None:
+        if "_error" in canonical:
+            output_block(canonical["_error"])
+            return
 
-    if "_error" in canonical:
-        print(json.dumps({
-            "decision": "block",
-            "reason": canonical["_error"]
-        }))
-        return
+        is_valid, error_message = validate_against_canonical(todos, canonical)
 
-    # Validate against canonical
-    is_valid, error_message = validate_todos(todos, canonical)
-
-    if not is_valid:
-        # Find SPEC file from canonical if available
-        spec_file = canonical.get("spec_file", "SPEC.json")
-
-        print(json.dumps({
-            "decision": "block",
-            "reason": (
-                f"=== TODO VALIDATION FAILED ===\n\n"
+        if not is_valid:
+            spec_file = canonical.get("spec_file", "SPEC.json")
+            output_block(
+                f"=== TODO STRUCTURE VALIDATION FAILED ===\n\n"
                 f"{error_message}\n\n"
                 f"Original task count: {canonical.get('task_count', '?')}\n"
                 f"Current task count: {len(todos)}\n\n"
-                f"TO RECOVER, regenerate the TODO from SPEC:\n\n"
-                f"  # Option 1: Use generate-todo.py\n"
+                f"TO RECOVER:\n"
                 f"  python3 $SCRIPTS/generate-todo.py --spec {spec_file} --base --format json\n\n"
-                f"  # Option 2: Read canonical directly\n"
-                f"  cat {get_canonical_path(project_dir)}\n\n"
                 f"Then recreate TodoWrite with ALL original task IDs.\n"
-                f"==============================="
+                f"========================================"
             )
-        }))
+            return
+
+        output_allow("validated", task_count=len(todos), canonical_count=canonical.get("task_count", 0))
         return
 
-    # Validation passed
-    print(json.dumps({
-        "status": "validated",
-        "task_count": len(todos),
-        "canonical_count": canonical.get("task_count", 0)
-    }), file=sys.stderr)
+    # =========================================
+    # LAYER 4: No SPEC, no canonical - implicit save
+    # =========================================
+    # This is normal TodoWrite usage outside of SPEC execution
+    save_canonical(project_dir, todos)
+    output_allow("canonical_created_implicit", task_count=len(todos))
 
 
 if __name__ == "__main__":
