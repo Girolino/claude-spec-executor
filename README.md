@@ -26,23 +26,34 @@ When Claude Code executes long tasks (hours), it faces critical challenges:
 ### Prerequisites
 
 - **Python 3.10+**
-- **jq** (for hook validation)
+
+### Install from GitHub (Recommended)
 
 ```bash
-# macOS
-brew install jq
+# Add the marketplace
+claude plugin marketplace add Girolino/claude-spec-executor
 
-# Ubuntu/Debian
-sudo apt install jq
+# Install the plugin
+claude plugin install spec-executor@claude-spec-executor --scope user
 ```
 
-### Install Plugin
+### Update to Latest Version
+
+```bash
+# Update marketplace cache
+claude plugin marketplace update claude-spec-executor
+
+# Reinstall plugin
+claude plugin update spec-executor@claude-spec-executor
+```
+
+### Alternative: Install from Local Clone
 
 ```bash
 # Clone the repo
 git clone https://github.com/Girolino/claude-spec-executor.git
 
-# Install to user scope (available in all projects)
+# Install to user scope
 claude plugin install ./claude-spec-executor --scope user
 ```
 
