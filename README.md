@@ -135,7 +135,7 @@ flowchart LR
 **Key components:**
 - **read-spec**: Interviews user, generates SPEC.json
 - **spec-executor**: Executes with TODO tracking
-- **validate-todo.sh**: Hook that enforces exact task count
+- **validate-todo.py**: Hook that enforces exact task count
 - **checkpoint.py**: Persists loop state for recovery
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed diagrams.
@@ -212,7 +212,8 @@ spec-executor/
 │           └── generate-todo.py   # TODO generation
 ├── hooks/
 │   ├── hooks.json                 # Hook configuration
-│   └── validate-todo.sh           # Count validation
+│   ├── validate-todo.py           # Count validation
+│   └── spec_utils.py              # Shared SPEC utilities
 ├── templates/                     # Stack examples
 ├── ARCHITECTURE.md                # Detailed diagrams
 └── README.md
