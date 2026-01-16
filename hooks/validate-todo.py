@@ -291,9 +291,18 @@ def main():
         new_ids = extract_task_ids(todos)
         overlap = original_ids & new_ids
 
-        if len(overlap) == 0 and len(original_ids) > 0 and len(new_ids) > 0:
-            # Zero overlap = fresh start, different work context
-            # Overwrite canonical instead of blocking
+        # Fresh start conditions:
+        # 1. Zero overlap between old and new IDs (both have IDs)
+        # 2. Old canonical has no task IDs (can't validate structure anyway)
+        # 3. New TODO has no task IDs (normal usage without SPEC format)
+        is_fresh_start = (
+            (len(overlap) == 0 and len(original_ids) > 0 and len(new_ids) > 0) or
+            (len(original_ids) == 0) or
+            (len(new_ids) == 0)
+        )
+
+        if is_fresh_start:
+            # Can't properly validate structure, allow overwriting
             save_canonical(project_dir, todos)
             output_allow(
                 "canonical_replaced_fresh_start",
