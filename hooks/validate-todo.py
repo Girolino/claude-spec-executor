@@ -285,6 +285,23 @@ def main():
             output_block(canonical["_error"])
             return
 
+        # Check if this is completely new work (no overlap in task IDs)
+        # If so, allow overwriting the canonical instead of blocking
+        original_ids = set(canonical.get("task_ids", []))
+        new_ids = extract_task_ids(todos)
+        overlap = original_ids & new_ids
+
+        if len(overlap) == 0 and len(original_ids) > 0 and len(new_ids) > 0:
+            # Zero overlap = fresh start, different work context
+            # Overwrite canonical instead of blocking
+            save_canonical(project_dir, todos)
+            output_allow(
+                "canonical_replaced_fresh_start",
+                task_count=len(todos),
+                previous_count=canonical.get("task_count", 0)
+            )
+            return
+
         is_valid, error_message = validate_against_canonical(todos, canonical)
 
         if not is_valid:

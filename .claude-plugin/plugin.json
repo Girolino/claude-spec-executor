@@ -1,6 +1,6 @@
 {
   "name": "spec-executor",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Autonomous execution of long-running tasks with TODO tracking and checkpoint recovery",
   "author": {
     "name": "Fernando Maluf"
