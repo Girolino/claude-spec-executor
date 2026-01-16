@@ -285,31 +285,33 @@ def main():
             output_block(canonical["_error"])
             return
 
-        # Check if this is completely new work (no overlap in task IDs)
-        # If so, allow overwriting the canonical instead of blocking
-        original_ids = set(canonical.get("task_ids", []))
-        new_ids = extract_task_ids(todos)
-        overlap = original_ids & new_ids
+        # Check if we're in SPEC execution mode
+        # SPEC mode = canonical has expected_count (set by Layer 1 validation)
+        spec_mode = canonical.get("expected_count") is not None
 
-        # Fresh start conditions:
-        # 1. Zero overlap between old and new IDs (both have IDs)
-        # 2. Old canonical has no task IDs (can't validate structure anyway)
-        # 3. New TODO has no task IDs (normal usage without SPEC format)
-        is_fresh_start = (
-            (len(overlap) == 0 and len(original_ids) > 0 and len(new_ids) > 0) or
-            (len(original_ids) == 0) or
-            (len(new_ids) == 0)
-        )
+        if not spec_mode:
+            # Not in SPEC mode - check for fresh start conditions
+            # This allows overwriting old canonical from different work context
+            original_ids = set(canonical.get("task_ids", []))
+            new_ids = extract_task_ids(todos)
+            overlap = original_ids & new_ids
 
-        if is_fresh_start:
-            # Can't properly validate structure, allow overwriting
-            save_canonical(project_dir, todos)
-            output_allow(
-                "canonical_replaced_fresh_start",
-                task_count=len(todos),
-                previous_count=canonical.get("task_count", 0)
+            # Fresh start if:
+            # 1. Zero overlap between old and new IDs (both have IDs), or
+            # 2. Old canonical has no task IDs (can't validate structure)
+            is_fresh_start = (
+                (len(overlap) == 0 and len(original_ids) > 0 and len(new_ids) > 0) or
+                (len(original_ids) == 0)
             )
-            return
+
+            if is_fresh_start:
+                save_canonical(project_dir, todos)
+                output_allow(
+                    "canonical_replaced_fresh_start",
+                    task_count=len(todos),
+                    previous_count=canonical.get("task_count", 0)
+                )
+                return
 
         is_valid, error_message = validate_against_canonical(todos, canonical)
 
