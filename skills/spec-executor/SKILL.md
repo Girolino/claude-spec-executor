@@ -53,6 +53,26 @@ Once SPEC execution begins, you MUST continue autonomously until:
 1. ALL tasks are completed, OR
 2. A blocking error occurs that genuinely requires human input
 
+## COMPLETION RULES (NON-NEGOTIABLE)
+
+You MUST NOT stop until ALL TODO items are marked `completed`.
+
+**A Stop hook will block premature stops.** If you try to stop with pending tasks, the hook will block and instruct you to continue.
+
+### If You Cannot Proceed With a Task
+
+- DO NOT stop and wait
+- DO NOT say "let me know if you want me to continue"
+- DO use `AskUserQuestion` to get clarification
+- THEN continue with execution
+
+### Your Only Options Are
+
+1. **Continue** with the next pending task
+2. **Use AskUserQuestion** if genuinely blocked and need human input
+
+The Stop hook + AskUserQuestion pattern prevents infinite loops while ensuring completion.
+
 ### Rules for Continuous Execution
 
 | Situation | Action |
@@ -103,6 +123,18 @@ If only SPEC.md exists, run `/read-spec` first to generate SPEC.json.
 
 **STOP. DO NOT PROCEED** until you complete these steps IN ORDER:
 
+### Step 0: Expand tasks (if not already expanded)
+Check if SPEC.json has `_expansion.expanded: true`. If not:
+```bash
+# Expand task types to verification tasks
+python3 $SCRIPTS/expand-tasks.py SPEC.json
+```
+
+This auto-generates pre/post tasks based on `type` field:
+- `ui` → 3 tasks (skills + main + visual QA)
+- `backend`/`func` → 2 tasks (main + test)
+- `docs` → 2 tasks (main + verify)
+
 ### Step 1: Count tasks AND set expectation
 ```bash
 # Count tasks and save expectation for hook validation
@@ -116,10 +148,11 @@ Replace `<NUMBER>` with the exact count from count_tasks.py output.
 
 **Example:**
 ```bash
+python3 $SCRIPTS/expand-tasks.py SPEC.json  # If not expanded
 python3 $SCRIPTS/count_tasks.py SPEC.json
-# Output: "Total tasks: 22"
+# Output: "Total tasks: 35"
 
-echo 22 > /tmp/claude-expected-todo-count
+echo 35 > /tmp/claude-expected-todo-count
 ```
 
 ### Step 2: Create COMPLETE TODO upfront
@@ -283,11 +316,21 @@ This enables session resumption if interrupted.
 
 | Document | Purpose | Update Frequency |
 |----------|---------|------------------|
-| SPEC.json | Task definitions (read-only during execution) | Never during execution |
+| SPEC.json | Task definitions (expanded, read-only during execution) | Never during execution |
 | SPEC.md | Execution Log, decisions, findings | Every 10 tasks / phase boundary |
 | TODO | Granular progress tracking | After every task |
 | Checkpoint | Loop state for /compact recovery | Every loop iteration |
 | **todo-canonical.json** | **Reference for TODO validation** | **Created once, never modified** |
+| **decisions.md** | **Execution context for scope preservation** | **At phase transitions (task X.0)** |
+
+### Scripts Reference
+
+| Script | Purpose |
+|--------|---------|
+| `expand-tasks.py` | Expand task types to verification tasks |
+| `count_tasks.py` | Count total tasks in SPEC.json |
+| `generate-todo.py` | Generate TODO structure from SPEC |
+| `checkpoint.py` | Manage loop state for /compact recovery |
 
 ### Canonical TODO (.claude/todo-canonical.json)
 
@@ -309,6 +352,84 @@ This file is created automatically on the first TodoWrite and serves as the **im
 - Never modified during execution
 - Survives `/compact`
 - Cleared only when `checkpoint.py clear` is called (execution complete)
+
+## Decisions.md Pattern (CRITICAL FOR SCOPE PRESERVATION)
+
+Every SPEC execution must maintain a `decisions.md` file to preserve execution context across `/compact`.
+
+### Why This Matters
+
+After `/compact`:
+- Claude forgets the "why" behind implementation decisions
+- Re-reading entire SPEC.md bloats context
+- Scope drift happens when Claude focuses on tasks but loses the objective
+
+### Required Tasks
+
+Every phase has a `X.0` task to update decisions.md:
+- **Task 0.0**: Create decisions.md with objective, constraints, success criteria
+- **Task 1.0, 2.0, etc.**: Update with previous phase decisions and current phase objectives
+
+### File Location
+
+`.claude/checkpoints/<spec-name>-decisions.md`
+
+### What to Write
+
+**At task 0.0** (creation):
+- Objective summary from SPEC.md
+- Key constraints (what must NOT change)
+- Success criteria (how we know we're done)
+
+**At task X.0** (updates):
+- Key decisions made in previous phase with rationale
+- What current phase will accomplish
+- Current state (phase, last completed task, next task)
+
+### Cleanup
+
+The file is deleted automatically when `checkpoint.py clear` runs at execution end.
+
+---
+
+## Task Types (Auto-Expansion)
+
+Tasks with a `type` field are auto-expanded by `expand-tasks.py` into visible verification tasks.
+
+### Expansion Rules
+
+| Type | Expands To | Example |
+|------|------------|---------|
+| `ui` | pre (skills) + main + post (visual QA) | `1.2a` + `1.2` + `1.2b` |
+| `backend` | main + post (test) | `1.3` + `1.3a` |
+| `func` | main + post (test) | `1.4` + `1.4a` |
+| `docs` | main + post (verify) | `1.0` + `1.0a` |
+| (none) | main only | `1.5` |
+
+### Why Visible Tasks
+
+After `/compact`, Claude forgets to run design skills and visual QA. Making them explicit TODO items ensures they happen.
+
+### Expanded Task Examples
+
+**UI task (type: ui):**
+```
+1.2a: Run /frontend-design and /vercel-design-guidelines for ProfileCard
+1.2: Create ProfileCard component
+1.2b: Visual QA: Verify ProfileCard with Claude in Chrome
+```
+
+**Backend task (type: backend):**
+```
+2.1: Implement getUserById query
+2.1a: Test getUserById - verify returns correct data and handles errors
+```
+
+### Checking Expansion Status
+
+The SPEC.json has `_expansion.expanded: true` after expansion. The script skips already-expanded files.
+
+---
 
 ## Checkpoint Pattern for Loops
 
@@ -344,7 +465,11 @@ python3 $SCRIPTS/checkpoint.py clear <spec-name>
 
 ### Checkpoint File Location
 
-`.claude/checkpoints/<spec-name>.json`
+```
+.claude/checkpoints/
+├── <spec-name>.json           # Loop state
+└── <spec-name>-decisions.md   # Execution context
+```
 
 ### SPEC Schema for Loops with Checkpoints
 

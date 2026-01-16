@@ -301,6 +301,13 @@ def main():
             )
             return
 
+        # Update canonical with new todos (preserves status changes)
+        save_canonical(
+            project_dir,
+            todos,
+            canonical.get("spec_file"),
+            canonical.get("expected_count")
+        )
         output_allow("validated", task_count=len(todos), canonical_count=canonical.get("task_count", 0))
         return
 

@@ -19,6 +19,7 @@ Usage:
     python3 checkpoint.py clear <spec-name>
 
 Checkpoint files are stored in: .claude/checkpoints/<spec-name>.json
+Decisions files are stored in: .claude/checkpoints/<spec-name>-decisions.md
 
 The --spec-file option stores the SPEC.json path in the checkpoint,
 allowing the validation hook to find it without guessing.
@@ -210,7 +211,7 @@ def fail_item(spec_name: str, index: int, item_id: str | None = None, reason: st
 
 
 def clear_checkpoint(spec_name: str, clear_canonical: bool = True):
-    """Clear/delete a checkpoint file and optionally the canonical TODO."""
+    """Clear/delete a checkpoint file, decisions.md, and optionally the canonical TODO."""
     path = get_checkpoint_path(spec_name)
 
     if path.exists():
@@ -218,6 +219,12 @@ def clear_checkpoint(spec_name: str, clear_canonical: bool = True):
         print(f"Checkpoint cleared: {path}")
     else:
         print(f"No checkpoint to clear for: {spec_name}")
+
+    # Clear decisions.md file
+    decisions_path = CHECKPOINT_DIR / f"{spec_name}-decisions.md"
+    if decisions_path.exists():
+        decisions_path.unlink()
+        print(f"Decisions file cleared: {decisions_path}")
 
     # Also clear canonical TODO file if requested
     if clear_canonical:

@@ -133,6 +133,104 @@ When a SPEC has a **loop phase** (iterating over dynamic items like profiles, fi
 3. **In verification phase** (after loop):
    - `Z.N`: Clear checkpoint after all verifications pass
 
+### 8. Decisions.md Pattern (CRITICAL FOR SCOPE PRESERVATION)
+Every phase MUST have a `X.0` task to update `decisions.md`. This file preserves execution context across `/compact`.
+
+**Why**: After `/compact`, Claude forgets the "why" behind the implementation. Re-reading the entire SPEC.md bloats context. The decisions.md is a compact checkpoint of objectives and decisions.
+
+**Required tasks**:
+- **Phase 0, task 0.0**: Create decisions.md with objective from SPEC.md
+- **Every subsequent phase, task X.0**: Update decisions.md with previous phase decisions and current phase objectives
+
+**File location**:
+```
+.claude/checkpoints/<spec-name>-decisions.md
+```
+
+**Template** (task 0.0 creates this):
+```markdown
+# Execution Context: <Feature Name>
+
+## Objective
+[Summary of SPEC.md goal - what we're building and why]
+
+## Key Constraints
+[From SPEC.md - things that must NOT change]
+
+## Success Criteria
+[How we know we're done]
+
+---
+
+## Phase 0 Decisions
+- [Decision]: [Rationale]
+
+## Current State
+Phase: 0
+Last completed: 0.0
+Next: 0.1
+```
+
+**Update template** (task X.0 for X > 0):
+```markdown
+## Phase X-1 Decisions
+- [Decision]: [Rationale]
+
+## Phase X Objectives
+- [What this phase will accomplish]
+
+## Current State
+Phase: X
+Last completed: X.0
+Next: X.1
+```
+
+**Cleanup**: The file is automatically deleted by `checkpoint.py clear` at the end of execution.
+
+### 9. Task Types for Automatic Verification (CRITICAL)
+Assign a `type` field to tasks. The `expand-tasks.py` script auto-generates verification tasks based on type.
+
+**Why**: After `/compact`, Claude forgets to run design skills and visual QA. Making them explicit TODO items ensures they happen.
+
+**Task Types:**
+
+| Type | Pre-task (auto-generated) | Post-task (auto-generated) |
+|------|---------------------------|----------------------------|
+| `ui` | Run `/frontend-design` + `/vercel-design-guidelines` | Visual QA with Claude in Chrome |
+| `backend` | - | Run tests, verify correct data |
+| `func` | - | Run tests, verify passes |
+| `docs` | - | Verify file exists |
+| (none) | - | - (just typecheck) |
+
+**Example - Compact:**
+```json
+{
+  "id": "1.2",
+  "type": "ui",
+  "task": "Create ProfileCard component",
+  "files": ["components/ProfileCard.tsx"]
+}
+```
+
+**After expansion (3 tasks):**
+```
+1.2a: Run /frontend-design and /vercel-design-guidelines for ProfileCard
+1.2: Create ProfileCard component
+1.2b: Visual QA: Verify ProfileCard with Claude in Chrome
+```
+
+**Expansion command:**
+```bash
+python3 $SCRIPTS/expand-tasks.py SPEC-compact.json -o SPEC.json
+```
+
+**Warning for alternating UI tasks:**
+If a phase has alternating task types (ui → backend → ui), the script warns:
+```
+⚠️ Phase phase-1 has alternating UI tasks: 1.1(ui) → 1.2(backend) → 1.3(ui)
+   Consider grouping UI tasks together to reduce repeated visual validations.
+```
+
 ---
 
 ## SPEC.json Schema
@@ -191,6 +289,12 @@ When a SPEC has a **loop phase** (iterating over dynamic items like profiles, fi
       "depends_on": [],
       "tasks": [
         {
+          "id": "0.0",
+          "task": "Create decisions.md with execution objective from SPEC.md",
+          "files": [".claude/checkpoints/<spec-name>-decisions.md"],
+          "notes": "Write: objective summary, key constraints, success criteria. See decisions.md template."
+        },
+        {
           "id": "0.1",
           "task": "Verify development environment",
           "verification": {
@@ -209,37 +313,31 @@ When a SPEC has a **loop phase** (iterating over dynamic items like profiles, fi
       "depends_on": ["phase-0"],
       "tasks": [
         {
+          "id": "1.0",
+          "task": "Update decisions.md: Record Phase 0 decisions and Phase 1 objectives",
+          "files": [".claude/checkpoints/<spec-name>-decisions.md"],
+          "notes": "Add: key decisions from Phase 0, what Phase 1 will accomplish, update Current State"
+        },
+        {
           "id": "1.1",
-          "task": "Clear task description",
-          "files": ["files to create or modify"],
-          "verification": {
-            "type": "cli",
-            "command": "$verification_commands.typecheck",
-            "success_criteria": "No errors"
-          },
-          "notes": "Implementation notes if needed"
+          "type": "backend",
+          "task": "Implement getUserById query",
+          "files": ["convex/users.ts"],
+          "notes": "Auto-expands to: 1.1 + 1.1a (test)"
         },
         {
           "id": "1.2",
-          "task": "UI Component implementation",
-          "pre_task": "Run /frontend-design skill",
-          "reuse_check": ["Check discovered component directories"],
-          "files": ["path/to/NewComponent.tsx"],
-          "verification": {
-            "type": "visual",
-            "action": "Visual verification + interaction test",
-            "success_criteria": "Component renders correctly, interactions work"
-          }
+          "type": "ui",
+          "task": "Create ProfileCard component",
+          "files": ["components/ProfileCard.tsx"],
+          "notes": "Auto-expands to: 1.2a (skills) + 1.2 + 1.2b (visual QA)"
         },
         {
           "id": "1.3",
-          "task": "Integration test for phase milestone",
-          "verification": {
-            "type": "e2e",
-            "action": "Full flow test",
-            "steps": ["Navigate to X", "Click Y", "Verify Z"],
-            "success_criteria": "Complete flow works without errors"
-          }
+          "type": "func",
+          "task": "Implement formatUserName utility",
+          "files": ["lib/utils/format.ts"],
+          "notes": "Auto-expands to: 1.3 + 1.3a (test)"
         },
         {
           "id": "1.4",
@@ -367,9 +465,8 @@ When a SPEC has a **loop phase** (iterating over dynamic items like profiles, fi
 ## Guidelines
 - The SPEC.json should be LONG and ROBUST - completeness over brevity
 - Break phases into small, verifiable tasks (15-30 min each)
-- Include testing tasks WITHIN each phase, not just at the end
-- Every UI task must be preceded by `/frontend-design`
-- Every task must have a verification with clear success criteria
+- **Assign `type` to tasks**: `ui`, `backend`, `func`, `docs` for auto-verification
+- **Group UI tasks together** in a phase to avoid repeated visual validations
 - Include file paths for every task
 - Order tasks by dependency
 - Keep completion_promise short and uppercase (e.g., "AUTH_COMPLETE", "GALLERY_DONE")
@@ -427,12 +524,13 @@ After this command completes, the executor will use:
 
 | Document | Purpose | Updated By |
 |----------|---------|------------|
-| **SPEC.json** | Task definitions, structured phases | read-spec (this skill) |
+| **SPEC-compact.json** | Original with task types | read-spec (this skill) |
+| **SPEC.json** | Expanded execution plan | expand-tasks.py |
 | **SPEC.md** | Execution Log, decisions, reference | Executor during execution |
 | **Checkpoint** | Loop state for /compact recovery | Executor during loop iterations |
 
 The executor runs `/spec-executor` which:
-1. Counts tasks in SPEC.json
+1. Counts tasks in SPEC.json (already expanded)
 2. Creates TODO with exact task count
 3. Updates SPEC.md Execution Log during execution
 4. **For loops**: Manages checkpoint file for resumption after /compact
@@ -441,13 +539,34 @@ The executor runs `/spec-executor` which:
 
 ## Final Output
 
-Write both files to the project root (or specified location):
-1. `SPEC.json` - The structured execution plan
-2. `SPEC.md` - Updated with Status table and Execution Log sections
+### Step 1: Write Compact SPEC
+Write `SPEC-compact.json` with task types assigned:
+```bash
+# Compact SPEC has type fields, before expansion
+```
 
-Confirm task count:
+### Step 2: Expand Tasks
+Run expansion to generate verification tasks:
+```bash
+python3 $SCRIPTS/expand-tasks.py SPEC-compact.json -o SPEC.json
+```
+
+This auto-generates pre/post tasks based on type:
+- `ui` → 3 tasks (skills + main + visual QA)
+- `backend`/`func` → 2 tasks (main + test)
+- `docs` → 2 tasks (main + verify)
+
+### Step 3: Verify Count
 ```bash
 python3 $SCRIPTS/count_tasks.py SPEC.json
 ```
 
-Report the total task count to the user so they know what to expect.
+### Step 4: Update SPEC.md
+Add Status table and Execution Log sections.
+
+### Final Files
+1. `SPEC-compact.json` - Original with types (keep for reference)
+2. `SPEC.json` - Expanded execution plan
+3. `SPEC.md` - Updated with Status table and Execution Log
+
+Report the **expanded** task count to the user so they know what to expect.
