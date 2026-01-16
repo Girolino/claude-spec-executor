@@ -83,7 +83,7 @@ def main():
     else:
         # No pending tasks, allow stop
         print(json.dumps({
-            "decision": "allow"
+            "decision": "approve"
         }))
 
 
