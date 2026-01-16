@@ -29,16 +29,24 @@ def get_project_dir() -> Path:
     return Path.cwd()
 
 
-def get_pending_todos(project_dir: Path) -> list[str]:
-    """Read canonical TODO state and return pending items."""
+def get_pending_todos(project_dir: Path) -> tuple[list[str], bool]:
+    """
+    Read canonical TODO state and return pending items.
+
+    Returns:
+        (pending_tasks, is_spec_mode) - only block if in SPEC mode
+    """
     canonical_path = project_dir / ".claude" / "todo-canonical.json"
 
     if not canonical_path.exists():
-        return []
+        return [], False
 
     try:
         with open(canonical_path) as f:
             canonical = json.load(f)
+
+        # Only block during SPEC execution (has expected_count)
+        is_spec_mode = canonical.get("expected_count") is not None
 
         todos = canonical.get("todos", [])
         pending = [
@@ -46,9 +54,9 @@ def get_pending_todos(project_dir: Path) -> list[str]:
             for t in todos
             if t.get("status") != "completed"
         ]
-        return pending
+        return pending, is_spec_mode
     except (json.JSONDecodeError, IOError):
-        return []
+        return [], False
 
 
 def main():
@@ -63,9 +71,11 @@ def main():
     cwd = hook_input.get("cwd", "")
     project_dir = Path(cwd) if cwd else get_project_dir()
 
-    pending = get_pending_todos(project_dir)
+    pending, is_spec_mode = get_pending_todos(project_dir)
 
-    if pending:
+    # Only block during SPEC execution mode
+    # Normal TODO usage shouldn't prevent stopping
+    if pending and is_spec_mode:
         # Format a few examples of pending tasks
         examples = pending[:3]
         example_str = ", ".join(f'"{t[:40]}..."' if len(t) > 40 else f'"{t}"' for t in examples)
