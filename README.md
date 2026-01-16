@@ -212,8 +212,7 @@ spec-executor/
 │           └── generate-todo.py   # TODO generation
 ├── hooks/
 │   ├── hooks.json                 # Hook configuration
-│   ├── validate-todo.py           # Count validation
-│   └── spec_utils.py              # Shared SPEC utilities
+│   └── validate-todo.py           # Count validation
 ├── templates/                     # Stack examples
 ├── ARCHITECTURE.md                # Detailed diagrams
 └── README.md

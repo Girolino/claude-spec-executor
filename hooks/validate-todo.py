@@ -3,13 +3,13 @@
 PostToolUse hook for TodoWrite validation.
 
 VALIDATION LAYERS (in order):
-1. Expected count file (/tmp/claude-expected-todo-count) - explicit expectation
-2. Auto-discovery of SPEC.json - counts tasks automatically (AGNOSTIC)
-3. Canonical file validation - ensures structure consistency
-4. Implicit canonical - for non-SPEC TodoWrite usage
+1. Expected count file (/tmp/claude-expected-todo-count) - set by /spec-executor skill
+2. Canonical file validation - ensures structure consistency during execution
+3. Implicit canonical - for normal TodoWrite usage
 
-This hook is AGNOSTIC - it doesn't depend on the LLM following instructions.
-If a SPEC.json exists in the project, validation is MANDATORY.
+The hook TRUSTS the /spec-executor skill to set up the expected count.
+No auto-discovery - this prevents conflicts with old SPEC.json files
+or interference with normal plan mode usage.
 
 Usage: Automatically triggered by Claude Code after TodoWrite calls
 Input: JSON from stdin with tool_input.todos
@@ -21,14 +21,6 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-
-# Import shared utilities (same directory)
-try:
-    from spec_utils import find_spec_file, count_spec_tasks
-except ImportError:
-    # Fallback if running standalone
-    sys.path.insert(0, str(Path(__file__).parent))
-    from spec_utils import find_spec_file, count_spec_tasks
 
 
 def get_project_dir() -> Path:
@@ -229,93 +221,6 @@ def check_expected_count_file(new_todos: list[dict]) -> tuple[bool, str, int | N
         return True, "", None
 
 
-def looks_like_spec_execution(todos: list[dict]) -> bool:
-    """
-    Check if the TODO looks like a SPEC execution.
-
-    A SPEC execution TODO has task IDs in format "X.Y: description".
-    Regular TODOs don't follow this pattern.
-
-    This prevents false positives when a project has SPEC.json
-    but the user is just using normal TODO tracking.
-    """
-    spec_pattern_count = 0
-    for todo in todos:
-        content = todo.get("content", "").strip()
-        # Check for pattern: "X.Y: " where X and Y are numbers
-        if ":" in content:
-            prefix = content.split(":")[0].strip()
-            # Valid SPEC task ID: "0.1", "2.10", "13.15", etc.
-            if "." in prefix:
-                parts = prefix.split(".")
-                if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-                    spec_pattern_count += 1
-
-    # Consider it a SPEC execution if >50% of items match the pattern
-    # or if there are at least 5 matching items
-    total = len(todos)
-    if total == 0:
-        return False
-
-    return spec_pattern_count >= 5 or (spec_pattern_count / total) > 0.5
-
-
-def check_spec_auto_discovery(
-    new_todos: list[dict],
-    project_dir: Path
-) -> tuple[bool, str, Path | None, int | None]:
-    """
-    Auto-discover SPEC.json and validate task count.
-
-    This makes the hook AGNOSTIC - it doesn't depend on the LLM
-    following instructions to run count_tasks.py first.
-
-    IMPORTANT: Only validates if the TODO looks like a SPEC execution
-    (has task IDs in X.Y format). This prevents blocking normal TODO usage.
-
-    Returns: (is_valid, message, spec_path, expected_count)
-    """
-    # First check if this looks like a SPEC execution
-    if not looks_like_spec_execution(new_todos):
-        return True, "", None, None
-
-    spec_path = find_spec_file(project_dir)
-
-    if spec_path is None:
-        return True, "", None, None
-
-    result = count_spec_tasks(spec_path)
-    if result is None:
-        return True, "", None, None
-
-    expected_count, _ = result
-    actual_count = len(new_todos)
-
-    if actual_count != expected_count:
-        # Build helpful error message
-        spec_rel_path = spec_path.relative_to(project_dir) if spec_path.is_relative_to(project_dir) else spec_path
-
-        return False, (
-            f"=== TODO COUNT VALIDATION FAILED ===\n"
-            f"SPEC file: {spec_rel_path}\n"
-            f"Expected: {expected_count} items (auto-counted from SPEC)\n"
-            f"Actual: {actual_count} items\n\n"
-            f"CRITICAL: When a SPEC.json exists, TODO must match EXACTLY.\n\n"
-            f"Each task ID from the SPEC must be a SEPARATE TODO item:\n"
-            f"  GOOD: '0.1: Verify environment'\n"
-            f"  GOOD: '0.2: Check dependencies'\n"
-            f"  BAD:  'Phase 0: Setup (5 tasks)'\n"
-            f"  BAD:  '0.1-0.5: Setup tasks'\n\n"
-            f"TO FIX:\n"
-            f"  1. Run: python3 $SCRIPTS/count_tasks.py {spec_rel_path} -v\n"
-            f"  2. Create TODO with ALL {expected_count} task IDs listed\n"
-            f"  3. Each task ID = ONE separate TODO item\n"
-            f"====================================="
-        ), spec_path, expected_count
-
-    return True, "spec_validated", spec_path, expected_count
-
-
 def output_block(reason: str) -> None:
     """Output a blocking decision."""
     print(json.dumps({
@@ -365,31 +270,13 @@ def main():
         return
 
     if message == "count_validated":
-        # Explicit count matched - find spec for metadata
-        spec_path = find_spec_file(project_dir)
-        spec_file = str(spec_path.relative_to(project_dir)) if spec_path else None
-        save_canonical(project_dir, todos, spec_file, expected_count)
+        # Explicit count matched - save as canonical for structure validation
+        save_canonical(project_dir, todos, None, expected_count)
         output_allow("canonical_created_explicit", task_count=len(todos))
         return
 
     # =========================================
-    # LAYER 2: Auto-discover and validate SPEC
-    # =========================================
-    is_valid, message, spec_path, expected_count = check_spec_auto_discovery(todos, project_dir)
-
-    if not is_valid:
-        output_block(message)
-        return
-
-    if message == "spec_validated":
-        # SPEC auto-validation passed - save canonical
-        spec_file = str(spec_path.relative_to(project_dir)) if spec_path else None
-        save_canonical(project_dir, todos, spec_file, expected_count)
-        output_allow("canonical_created_auto", task_count=len(todos), spec_file=spec_file)
-        return
-
-    # =========================================
-    # LAYER 3: Validate against existing canonical
+    # LAYER 2: Validate against existing canonical
     # =========================================
     canonical = load_canonical(project_dir)
 
@@ -418,7 +305,7 @@ def main():
         return
 
     # =========================================
-    # LAYER 4: No SPEC, no canonical - implicit save
+    # LAYER 3: No canonical - implicit save
     # =========================================
     # This is normal TodoWrite usage outside of SPEC execution
     save_canonical(project_dir, todos)
