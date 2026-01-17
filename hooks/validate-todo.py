@@ -294,7 +294,8 @@ def main():
 
         is_different_work = (
             (len(overlap) == 0 and len(original_ids) > 0 and len(new_ids) > 0) or
-            (len(original_ids) == 0)  # Can't validate if no IDs to compare
+            (len(original_ids) == 0) or  # Can't validate if no IDs to compare
+            (len(new_ids) == 0)  # Non-SPEC work (no X.Y format) = different context
         )
 
         if is_different_work:
