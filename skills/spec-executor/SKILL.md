@@ -17,20 +17,22 @@ Execute SPEC.json with granular TODO tracking and continuous progress.
 SCRIPTS=$(dirname "$(find ~/.claude -name "count_tasks.py" -path "*/spec-executor/*" 2>/dev/null | head -1)")
 ```
 
-### 2. Count Tasks
+### 2. Generate TODO from SPEC
 
 ```bash
+# Count tasks and set expected count
 python3 $SCRIPTS/count_tasks.py SPEC.json
-# Output: "Total tasks: 35"
+echo <count> > /tmp/claude-expected-todo-count
 
-echo 35 > /tmp/claude-expected-todo-count
+# Generate TODO structure (copy output for TodoWrite)
+python3 $SCRIPTS/generate-todo.py --spec SPEC.json --base --format json
 ```
 
-### 3. Create Complete TODO
+### 3. Create TODO
 
-Call TodoWrite with **ALL tasks from ALL phases** in one call.
+Copy the JSON output from generate-todo.py and use it in TodoWrite.
 
-A hook validates the count matches. If mismatch, recreate until it passes.
+A hook validates the count matches. If mismatch, regenerate.
 
 ---
 
