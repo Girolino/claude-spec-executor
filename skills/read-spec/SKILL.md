@@ -105,11 +105,31 @@ Before creating ANY new component:
 3. If creating a new reusable component, place it in the shared components directory
 4. Follow existing patterns and prop interfaces
 
-### 6. Frontend Design Skill (MANDATORY FOR UI)
-Before writing ANY UI code, the executing session MUST run `/frontend-design` skill first to:
-- Get design guidance for the component
-- Ensure consistency with existing design system
-- Apply appropriate styling based on project conventions
+### 6. UI Component Validation (MANDATORY)
+For any task that creates or modifies UI components:
+
+**BEFORE creating the component:**
+- Run `/frontend-design` to discover existing design system and get guidance
+
+**AFTER creating the component:**
+- Run `/visual-qa` to verify it renders correctly
+
+**Example task sequence for UI work:**
+```json
+{
+  "id": "1.1",
+  "task": "Run /frontend-design for ProfileCard component"
+},
+{
+  "id": "1.2",
+  "task": "Create ProfileCard component",
+  "files": ["components/ProfileCard.tsx"]
+},
+{
+  "id": "1.3",
+  "task": "Run /visual-qa to verify ProfileCard renders correctly"
+}
+```
 
 ### 7. Checkpoint Pattern for Loops (CRITICAL FOR LONG TASKS)
 When a SPEC has a **loop phase** (iterating over dynamic items like profiles, files, etc.), you MUST add checkpoint tasks to survive `/compact`:
@@ -133,8 +153,8 @@ When a SPEC has a **loop phase** (iterating over dynamic items like profiles, fi
 3. **In verification phase** (after loop):
    - `Z.N`: Clear checkpoint after all verifications pass
 
-### 8. Decisions.md Pattern (CRITICAL FOR SCOPE PRESERVATION)
-Every phase MUST have a `X.0` task to update `decisions.md`. This file preserves execution context across `/compact`.
+### 8. Decisions.md Pattern (FOR SCOPE PRESERVATION)
+Every phase should have a `X.0` task to update `decisions.md`. This file preserves execution context across `/compact`.
 
 **Why**: After `/compact`, Claude forgets the "why" behind the implementation. Re-reading the entire SPEC.md bloats context. The decisions.md is a compact checkpoint of objectives and decisions.
 
@@ -171,66 +191,6 @@ Last completed: 0.0
 Next: 0.1
 ```
 
-**Update template** (task X.0 for X > 0):
-```markdown
-## Phase X-1 Decisions
-- [Decision]: [Rationale]
-
-## Phase X Objectives
-- [What this phase will accomplish]
-
-## Current State
-Phase: X
-Last completed: X.0
-Next: X.1
-```
-
-**Cleanup**: The file is automatically deleted by `checkpoint.py clear` at the end of execution.
-
-### 9. Task Types for Automatic Verification (CRITICAL)
-Assign a `type` field to tasks. The `expand-tasks.py` script auto-generates verification tasks based on type.
-
-**Why**: After `/compact`, Claude forgets to run design skills and visual QA. Making them explicit TODO items ensures they happen.
-
-**Task Types:**
-
-| Type | Pre-task (auto-generated) | Post-task (auto-generated) |
-|------|---------------------------|----------------------------|
-| `ui` | Run `/frontend-design` + `/vercel-design-guidelines` | Visual QA with Claude in Chrome |
-| `backend` | - | Run tests, verify correct data |
-| `func` | - | Run tests, verify passes |
-| `docs` | - | Verify file exists |
-| (none) | - | - (just typecheck) |
-
-**Example - Compact:**
-```json
-{
-  "id": "1.2",
-  "type": "ui",
-  "task": "Create ProfileCard component",
-  "files": ["components/ProfileCard.tsx"]
-}
-```
-
-**After expansion (3 tasks):**
-```
-1.2a: Run /frontend-design and /vercel-design-guidelines for ProfileCard
-1.2: Create ProfileCard component
-1.2b: Visual QA: Verify ProfileCard with Claude in Chrome
-```
-
-**Expansion command:**
-```bash
-python3 $SCRIPTS/expand-tasks.py SPEC-compact.json -o SPEC.json
-```
-
-**Warning for alternating UI tasks:**
-If a phase has alternating task types (ui → backend → ui), the script warns:
-```
-⚠️ Phase phase-1 has alternating UI tasks: 1.1(ui) → 1.2(backend) → 1.3(ui)
-   Consider grouping UI tasks together to reduce repeated visual validations.
-```
-
 ---
 
 ## SPEC.json Schema
@@ -252,7 +212,9 @@ If a phase has alternating task types (ui → backend → ui), the script warns:
     "critical_notes": [
       "Run /spec-executor skill which counts tasks first",
       "TODO must have EXACTLY the task count from count_tasks.py",
-      "Update SPEC.md Execution Log every 10 tasks or at phase boundaries"
+      "Update SPEC.md Execution Log every 10 tasks or at phase boundaries",
+      "Run /frontend-design BEFORE creating UI components",
+      "Run /visual-qa AFTER creating UI components"
     ]
   },
 
@@ -292,7 +254,7 @@ If a phase has alternating task types (ui → backend → ui), the script warns:
           "id": "0.0",
           "task": "Create decisions.md with execution objective from SPEC.md",
           "files": [".claude/checkpoints/<spec-name>-decisions.md"],
-          "notes": "Write: objective summary, key constraints, success criteria. See decisions.md template."
+          "notes": "Write: objective summary, key constraints, success criteria."
         },
         {
           "id": "0.1",
@@ -315,48 +277,40 @@ If a phase has alternating task types (ui → backend → ui), the script warns:
         {
           "id": "1.0",
           "task": "Update decisions.md: Record Phase 0 decisions and Phase 1 objectives",
-          "files": [".claude/checkpoints/<spec-name>-decisions.md"],
-          "notes": "Add: key decisions from Phase 0, what Phase 1 will accomplish, update Current State"
+          "files": [".claude/checkpoints/<spec-name>-decisions.md"]
         },
         {
           "id": "1.1",
-          "type": "backend",
-          "task": "Implement getUserById query",
-          "files": ["convex/users.ts"],
-          "notes": "Auto-expands to: 1.1 + 1.1a (test)"
+          "task": "Run /frontend-design for ProfileCard component",
+          "notes": "Get design guidance before creating UI"
         },
         {
           "id": "1.2",
-          "type": "ui",
           "task": "Create ProfileCard component",
-          "files": ["components/ProfileCard.tsx"],
-          "notes": "Auto-expands to: 1.2a (skills) + 1.2 + 1.2b (visual QA)"
+          "files": ["components/ProfileCard.tsx"]
         },
         {
           "id": "1.3",
-          "type": "func",
-          "task": "Implement formatUserName utility",
-          "files": ["lib/utils/format.ts"],
-          "notes": "Auto-expands to: 1.3 + 1.3a (test)"
+          "task": "Run /visual-qa to verify ProfileCard renders correctly",
+          "notes": "Verify UI after creation"
         },
         {
           "id": "1.4",
-          "task": "Initialize checkpoint for loop tracking",
-          "command": "python3 $SCRIPTS/checkpoint.py init <spec-name> --total <ITEM_COUNT>",
-          "note": "Only if next phase has a loop. Replace <ITEM_COUNT> with actual count."
+          "task": "Implement getUserById query",
+          "files": ["convex/users.ts"]
         },
         {
           "id": "1.5",
-          "task": "Check existing checkpoint (for resumption after /compact)",
-          "command": "python3 $SCRIPTS/checkpoint.py read <spec-name>",
-          "note": "If checkpoint exists, skip completed items in the loop"
+          "task": "Initialize checkpoint for loop tracking",
+          "command": "python3 $SCRIPTS/checkpoint.py init <spec-name> --total <ITEM_COUNT>",
+          "notes": "Only if next phase has a loop. Replace <ITEM_COUNT> with actual count."
         }
       ]
     },
     {
       "id": "phase-2",
       "name": "Process Items (Loop Phase)",
-      "description": "For each item, execute tasks 2.0-2.N. CRITICAL: Update checkpoint for /compact recovery.",
+      "description": "For each item, execute tasks 2.0-2.N. Update checkpoint for /compact recovery.",
       "loop": {
         "over": "items from phase-1",
         "checkpoint_spec": "<spec-name>",
@@ -365,7 +319,7 @@ If a phase has alternating task types (ui → backend → ui), the script warns:
             "id": "2.0",
             "task": "Update checkpoint: starting this item",
             "command": "python3 $SCRIPTS/checkpoint.py update <spec-name> --index <INDEX> --task 2.0 --item-id <ITEM_ID> --item-name '<ITEM_NAME>'",
-            "note": "MUST run at START of each loop iteration"
+            "notes": "MUST run at START of each loop iteration"
           },
           {
             "id": "2.1",
@@ -379,7 +333,7 @@ If a phase has alternating task types (ui → backend → ui), the script warns:
             "id": "2.N+1",
             "task": "Mark item complete in checkpoint",
             "command": "python3 $SCRIPTS/checkpoint.py complete <spec-name> --index <INDEX> --item-id <ITEM_ID>",
-            "note": "MUST run at END of each loop iteration"
+            "notes": "MUST run at END of each loop iteration"
           }
         ]
       }
@@ -396,7 +350,7 @@ If a phase has alternating task types (ui → backend → ui), the script warns:
           "id": "3.2",
           "task": "Clear checkpoint (execution complete)",
           "command": "python3 $SCRIPTS/checkpoint.py clear <spec-name>",
-          "note": "Only after ALL verifications pass"
+          "notes": "Only after ALL verifications pass"
         }
       ]
     }
@@ -422,6 +376,10 @@ If a phase has alternating task types (ui → backend → ui), the script warns:
       "Each task ID (0.1, 0.2, etc.) = ONE separate TODO item",
       "TODO count must EXACTLY match count_tasks.py output",
       "If count doesn't match, recreate TODO before proceeding"
+    ],
+    "ui_workflow": [
+      "BEFORE creating UI: Run /frontend-design",
+      "AFTER creating UI: Run /visual-qa"
     ],
     "during_execution": [
       "Update TODO status in real-time",
@@ -465,8 +423,6 @@ If a phase has alternating task types (ui → backend → ui), the script warns:
 ## Guidelines
 - The SPEC.json should be LONG and ROBUST - completeness over brevity
 - Break phases into small, verifiable tasks (15-30 min each)
-- **Assign `type` to tasks**: `ui`, `backend`, `func`, `docs` for auto-verification
-- **Group UI tasks together** in a phase to avoid repeated visual validations
 - Include file paths for every task
 - Order tasks by dependency
 - Keep completion_promise short and uppercase (e.g., "AUTH_COMPLETE", "GALLERY_DONE")
@@ -474,6 +430,7 @@ If a phase has alternating task types (ui → backend → ui), the script warns:
 - **For loops**: ALWAYS add checkpoint tasks (init, update, complete, clear)
 - **Checkpoint naming**: Use kebab-case spec name (e.g., "data-migration", "profile-sync")
 - **Use $verification_commands references** instead of hardcoding commands
+- **For UI tasks**: Include /frontend-design and /visual-qa in the task sequence
 
 ---
 
@@ -518,55 +475,21 @@ Document key decisions made during the interview here.
 
 ---
 
-## Dual-Document Strategy
-
-After this command completes, the executor will use:
-
-| Document | Purpose | Updated By |
-|----------|---------|------------|
-| **SPEC-compact.json** | Original with task types | read-spec (this skill) |
-| **SPEC.json** | Expanded execution plan | expand-tasks.py |
-| **SPEC.md** | Execution Log, decisions, reference | Executor during execution |
-| **Checkpoint** | Loop state for /compact recovery | Executor during loop iterations |
-
-The executor runs `/spec-executor` which:
-1. Counts tasks in SPEC.json (already expanded)
-2. Creates TODO with exact task count
-3. Updates SPEC.md Execution Log during execution
-4. **For loops**: Manages checkpoint file for resumption after /compact
-
----
-
 ## Final Output
 
-### Step 1: Write Compact SPEC
-Write `SPEC-compact.json` with task types assigned:
-```bash
-# Compact SPEC has type fields, before expansion
-```
+### Step 1: Write SPEC.json
+Write `SPEC.json` with all phases and tasks.
 
-### Step 2: Expand Tasks
-Run expansion to generate verification tasks:
-```bash
-python3 $SCRIPTS/expand-tasks.py SPEC-compact.json -o SPEC.json
-```
-
-This auto-generates pre/post tasks based on type:
-- `ui` → 3 tasks (skills + main + visual QA)
-- `backend`/`func` → 2 tasks (main + test)
-- `docs` → 2 tasks (main + verify)
-
-### Step 3: Verify Count
+### Step 2: Verify Count
 ```bash
 python3 $SCRIPTS/count_tasks.py SPEC.json
 ```
 
-### Step 4: Update SPEC.md
+### Step 3: Update SPEC.md
 Add Status table and Execution Log sections.
 
 ### Final Files
-1. `SPEC-compact.json` - Original with types (keep for reference)
-2. `SPEC.json` - Expanded execution plan
-3. `SPEC.md` - Updated with Status table and Execution Log
+1. `SPEC.json` - Execution plan
+2. `SPEC.md` - Updated with Status table and Execution Log
 
-Report the **expanded** task count to the user so they know what to expect.
+Report the task count to the user so they know what to expect.
