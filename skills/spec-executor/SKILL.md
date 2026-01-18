@@ -56,37 +56,6 @@ After clarification, resume immediately.
 
 ---
 
-## TODO Rules (CRITICAL)
-
-**Each task in SPEC.json = ONE separate TODO item.**
-
-Extract task IDs directly from SPEC.json. Format: `{id}: {description}`
-
-```
-CORRECT:
-0.1: Verify client folder exists
-0.2: Verify assets loaded
-0.3: Verify strategy loaded
-0.4: Verify image prompt reference loaded
-1.1: Analyze last 3 months of calendars
-1.2: GATE - Confirm post count
-```
-
-```
-WRONG - NEVER DO THIS:
-"Phase 0.1-0.4: Pre-Flight Checks"    <- BATCHING TASKS
-"Phase 1: Discovery"                   <- TOO VAGUE
-"Complete all verification tasks"      <- NOT GRANULAR
-```
-
-If SPEC.json has 35 tasks, your TODO must have exactly 35 items.
-
-### Loop Tasks
-Loop tasks (2.0, 2.1, ...) appear ONCE in TODO but execute multiple times.
-Checkpoint tracks which item; TODO tracks which task ID.
-
----
-
 ## UI Component Workflow
 
 For any UI task:
