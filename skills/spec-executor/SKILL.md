@@ -110,12 +110,36 @@ Update SPEC.md Execution Log:
 
 ## Checkpoints (Loops Only)
 
-For SPECs with loops over 5+ items, use checkpoints for recovery.
+Use checkpoints **only if ALL** apply:
+- Loop iterates over **5+ items**
+- Expected execution time **> 30 minutes**
 
-See [CHECKPOINT_GUIDE.md](../shared/CHECKPOINT_GUIDE.md) for:
-- When to use
-- Commands (init, update, complete, read, clear)
-- Resumption protocol
+### Checkpoint Commands
+
+```bash
+# Initialize (after discovering total items)
+python3 $SCRIPTS/checkpoint.py init <spec-name> --total <N> --spec-file SPEC.json
+
+# Update (at START of each loop iteration)
+python3 $SCRIPTS/checkpoint.py update <spec-name> --index <N> --task <task-id>
+
+# Complete (at END of each loop iteration)
+python3 $SCRIPTS/checkpoint.py complete <spec-name> --index <N>
+
+# Read (to check state or resume)
+python3 $SCRIPTS/checkpoint.py read <spec-name>
+
+# Clear (after ALL verifications pass)
+python3 $SCRIPTS/checkpoint.py clear <spec-name>
+```
+
+### Files Location
+
+```
+.claude/checkpoints/
+├── <spec-name>.json           # Loop state
+└── <spec-name>-decisions.md   # Execution context
+```
 
 ---
 
@@ -126,6 +150,15 @@ See [CHECKPOINT_GUIDE.md](../shared/CHECKPOINT_GUIDE.md) for:
 3. Generate TODO: `python3 $SCRIPTS/generate-todo.py --spec SPEC.json`
 4. Recreate TODO with correct status
 5. Resume from next incomplete task
+
+### Recovery Example
+
+```bash
+python3 $SCRIPTS/checkpoint.py read my-feature
+# Output: current_index=15, current_task=2.3, completed=15/40
+
+# Resume from item 16, task 2.0
+```
 
 ---
 
@@ -141,10 +174,3 @@ Summary:
 
 <promise>COMPLETION_PROMISE</promise>
 ```
-
----
-
-## Reference
-
-- [CHECKPOINT_GUIDE.md](../shared/CHECKPOINT_GUIDE.md) - Loop recovery
-- [EXAMPLES.md](../shared/EXAMPLES.md) - Execution traces

@@ -22,20 +22,14 @@ This informs SPEC.json `stack` and `verification_commands`.
 
 ## Phase 2: Interview
 
-Read @SPEC.md and interview the user about:
-- Technical implementation details
-- UI/UX decisions
-- Edge cases and error handling
-- Integration with existing features
-
-### Required Questions
-
-Use `AskUserQuestion` to gather:
+Read @SPEC.md and use `AskUserQuestion` to gather:
 1. Build/typecheck command
 2. Lint command
 3. Database sync command (if applicable)
 4. How to run dev server
 5. Test command (if applicable)
+
+Also clarify: technical implementation details, UI/UX decisions, edge cases.
 
 Don't ask questions you can answer from discovery.
 
@@ -46,58 +40,106 @@ Don't ask questions you can answer from discovery.
 ### Core Principles
 
 1. **Autonomous Execution** - Executor runs end-to-end, returns only when complete
-2. **Granular Tasks** - Break every phase into small, verifiable tasks (15-30 min each)
+2. **Granular Tasks** - Small, verifiable tasks (15-30 min each)
 3. **Quality Over Speed** - Production-ready code, not quick hacks
-4. **Testing Throughout** - Verify after each task, not batched at end
 
 ### UI Task Pattern
 
-For any UI component:
+For any UI component, always create 3 tasks:
 ```
 1. Run /frontend-design for [Component]
 2. Create [Component]
 3. Run /visual-qa to verify [Component]
 ```
 
-### Checkpoints (for loops only)
-
-Add checkpoint tasks if:
-- Loop iterates over 5+ items
-- Expected time > 30 minutes
-
-See [CHECKPOINT_GUIDE.md](../shared/CHECKPOINT_GUIDE.md) for details.
-
-### SPEC.json Structure
+### SPEC.json Schema
 
 ```json
 {
   "feature": "Feature Name",
+  "description": "Brief description",
   "completion_promise": "FEATURE_COMPLETE",
-  "stack": { "runtime": "bun", "framework": "nextjs", ... },
-  "verification_commands": { "typecheck": "...", "build": "..." },
+  "spec_reference": "SPEC.md",
+
+  "stack": {
+    "runtime": "bun | npm | pnpm | yarn",
+    "framework": "nextjs | express | etc",
+    "database": "convex | prisma | none",
+    "styling": "tailwind | css-modules | etc"
+  },
+
+  "verification_commands": {
+    "typecheck": "bun run typecheck",
+    "lint": "bun run lint",
+    "build": "bun run build",
+    "dev": "bun run dev",
+    "db_sync": "bunx convex dev --once",
+    "test": "bun run test"
+  },
+
   "phases": [
     {
       "id": "phase-0",
       "name": "Pre-Flight",
       "tasks": [
-        { "id": "0.0", "task": "Create decisions.md" },
-        { "id": "0.1", "task": "Verify typecheck passes" }
+        { "id": "0.0", "task": "Create decisions.md", "files": [".claude/checkpoints/<spec>-decisions.md"] },
+        { "id": "0.1", "task": "Verify typecheck passes" },
+        { "id": "0.2", "task": "Verify build passes" }
+      ]
+    },
+    {
+      "id": "phase-1",
+      "name": "Implementation",
+      "tasks": [
+        { "id": "1.0", "task": "Update decisions.md for Phase 1" },
+        { "id": "1.1", "task": "Run /frontend-design for UserCard" },
+        { "id": "1.2", "task": "Create UserCard component", "files": ["src/components/UserCard.tsx"] },
+        { "id": "1.3", "task": "Run /visual-qa for UserCard" }
       ]
     }
+  ],
+
+  "definition_of_done": [
+    "All phases completed",
+    "TypeScript passes",
+    "Build succeeds",
+    "No console errors"
   ]
 }
 ```
 
-For complete schema, see [SCHEMA.md](SCHEMA.md).
-For examples, see [EXAMPLES.md](../shared/EXAMPLES.md).
+### Task ID Format
+
+- Format: `{phase}.{task}` (e.g., `0.1`, `1.3`, `2.0`)
+- Phase 0: Pre-flight checks
+- Task X.0: Usually "Update decisions.md"
+
+### Loop Phases (for 5+ items)
+
+When iterating over dynamic items, add checkpoint tasks:
+
+```json
+{
+  "id": "phase-2",
+  "name": "Process Items",
+  "loop": {
+    "over": "items from phase-1",
+    "checkpoint_spec": "my-feature",
+    "tasks": [
+      { "id": "2.0", "task": "Update checkpoint: starting item" },
+      { "id": "2.1", "task": "Process item" },
+      { "id": "2.2", "task": "Verify item" },
+      { "id": "2.3", "task": "Mark item complete in checkpoint" }
+    ]
+  }
+}
+```
 
 ---
 
 ## Phase 4: Prepare SPEC.md
 
 Add these sections to SPEC.md:
-
-### Status Table
 
 ```markdown
 ## Status
@@ -106,11 +148,7 @@ Add these sections to SPEC.md:
 |-------|------|--------|
 | Phase 0 | Pre-flight | pending |
 | Phase 1 | ... | pending |
-```
 
-### Execution Log
-
-```markdown
 ## Execution Log
 
 ### Progress
@@ -127,13 +165,11 @@ Add these sections to SPEC.md:
 
 ## Final Output
 
-1. Write `SPEC.json` with all phases and tasks
-2. Verify count: `python3 $SCRIPTS/count_tasks.py SPEC.json`
-3. Update SPEC.md with Status and Execution Log sections
+1. Write `SPEC.json` following the schema above
+2. Count tasks:
+   ```bash
+   SCRIPTS=$(dirname "$(find ~/.claude -name "count_tasks.py" -path "*/spec-executor/*" 2>/dev/null | head -1)")
+   python3 $SCRIPTS/count_tasks.py SPEC.json
+   ```
+3. Update SPEC.md with Status and Execution Log
 4. Report task count to user
-
-For reference material:
-- [SCHEMA.md](SCHEMA.md) - Full JSON schema
-- [REFERENCE.md](REFERENCE.md) - Task types, glossary
-- [EXAMPLES.md](../shared/EXAMPLES.md) - Real execution traces
-- [CHECKPOINT_GUIDE.md](../shared/CHECKPOINT_GUIDE.md) - Loop recovery
