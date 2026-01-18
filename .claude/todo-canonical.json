@@ -1,0 +1,49 @@
+{
+  "created_at": "2026-01-18T13:20:24.721548+00:00",
+  "spec_file": null,
+  "expected_count": 8,
+  "task_count": 8,
+  "task_ids": [],
+  "todos": [
+    {
+      "content": "Create shared CHECKPOINT_GUIDE.md",
+      "status": "completed",
+      "activeForm": "Creating shared CHECKPOINT_GUIDE.md"
+    },
+    {
+      "content": "Create read-spec/SCHEMA.md with full JSON schema",
+      "status": "completed",
+      "activeForm": "Creating read-spec/SCHEMA.md"
+    },
+    {
+      "content": "Create read-spec/REFERENCE.md with task types and glossary",
+      "status": "completed",
+      "activeForm": "Creating read-spec/REFERENCE.md"
+    },
+    {
+      "content": "Create shared EXAMPLES.md with real execution traces",
+      "status": "completed",
+      "activeForm": "Creating shared EXAMPLES.md"
+    },
+    {
+      "content": "Rewrite read-spec/SKILL.md (496 -> ~160 lines)",
+      "status": "completed",
+      "activeForm": "Rewriting read-spec/SKILL.md"
+    },
+    {
+      "content": "Rewrite spec-executor/SKILL.md (424 -> ~130 lines)",
+      "status": "completed",
+      "activeForm": "Rewriting spec-executor/SKILL.md"
+    },
+    {
+      "content": "Update visual-qa/SKILL.md if needed",
+      "status": "completed",
+      "activeForm": "Updating visual-qa/SKILL.md"
+    },
+    {
+      "content": "Commit, push, and update plugin",
+      "status": "completed",
+      "activeForm": "Committing and pushing changes"
+    }
+  ]
+}

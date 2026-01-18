@@ -44,7 +44,7 @@ Read @SPEC.md and interview the user about:
 
 ### Required Questions
 
-At minimum, gather:
+Use `AskUserQuestion` to gather:
 1. Build/typecheck command
 2. Lint command
 3. Database sync command (if applicable)
