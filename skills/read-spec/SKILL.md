@@ -114,10 +114,21 @@ For any UI component, always create 3 tasks:
 - Phase 0: Pre-flight checks
 - Task X.0: Usually "Update decisions.md"
 
-### Loop Phases (for 5+ items)
+### Loops
 
-When iterating over dynamic items, add checkpoint tasks:
+Two approaches depending on complexity:
 
+**Simple loop** (< 5 items or quick execution): use `note` field
+```json
+{
+  "id": "3.2",
+  "task": "Update profiles via API",
+  "command": "bunx convex run profiles:update '{...}'",
+  "note": "Run for each Tier A profile"
+}
+```
+
+**Loop with checkpoint** (5+ items, 30+ min): use `loop` structure
 ```json
 {
   "id": "phase-2",
@@ -134,6 +145,8 @@ When iterating over dynamic items, add checkpoint tasks:
   }
 }
 ```
+
+Use checkpoints only when recovery after `/compact` is needed.
 
 ---
 
