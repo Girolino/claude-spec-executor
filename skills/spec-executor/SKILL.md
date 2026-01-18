@@ -54,24 +54,30 @@ After clarification, resume immediately.
 
 ---
 
-## TODO Rules
+## TODO Rules (CRITICAL)
 
-### Format
-Each task ID = ONE TODO item: `{id}: {description}`
+**Each task in SPEC.json = ONE separate TODO item.**
+
+Extract task IDs directly from SPEC.json. Format: `{id}: {description}`
 
 ```
-0.1: Create decisions.md
-0.2: Verify typecheck passes
-1.0: Update decisions.md for Phase 1
-1.1: Run /frontend-design for UserCard
+CORRECT:
+0.1: Verify client folder exists
+0.2: Verify assets loaded
+0.3: Verify strategy loaded
+0.4: Verify image prompt reference loaded
+1.1: Analyze last 3 months of calendars
+1.2: GATE - Confirm post count
 ```
 
-### Anti-Patterns (NEVER do)
 ```
-BAD: "Phase 0: Setup" (combines tasks)
-BAD: "Implement backend" (too vague)
-BAD: "Complete Phase 1-3" (batching)
+WRONG - NEVER DO THIS:
+"Phase 0.1-0.4: Pre-Flight Checks"    <- BATCHING TASKS
+"Phase 1: Discovery"                   <- TOO VAGUE
+"Complete all verification tasks"      <- NOT GRANULAR
 ```
+
+If SPEC.json has 35 tasks, your TODO must have exactly 35 items.
 
 ### Loop Tasks
 Loop tasks (2.0, 2.1, ...) appear ONCE in TODO but execute multiple times.
