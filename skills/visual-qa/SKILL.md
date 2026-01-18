@@ -1,4 +1,9 @@
-# Visual QA Skill
+---
+name: visual-qa
+description: Verify UI components render correctly using Claude in Chrome. Run after creating or modifying UI components to check layout, responsiveness, and interactive states.
+---
+
+# Visual QA
 
 Verify UI components render correctly using Claude in Chrome.
 
