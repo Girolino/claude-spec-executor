@@ -11,26 +11,12 @@ Transform SPEC.md into an executable SPEC.json with granular tasks.
 
 ## Phase 1: Discovery
 
-Before interviewing, understand the project:
+Explore the **codebase** to understand:
+1. Project structure and relevant existing code
+2. Stack and tooling (package.json, config files)
+3. Patterns and conventions already in use
 
-### What to Discover
-
-| Area | How |
-|------|-----|
-| Components | `Glob("**/components/**/*.{tsx,jsx}")` |
-| Hooks | `Glob("**/hooks/**/*.{ts,tsx}")` |
-| Structure | `LS("src/")` or `LS("app/")` |
-| Stack | Check package.json, tsconfig.json, next.config.* |
-
-### Stack Detection
-
-Identify from config files:
-- **Runtime:** npm, bun, pnpm, yarn
-- **Framework:** Next.js, Express, Fastify
-- **Database:** Convex, Prisma, Drizzle
-- **Styling:** Tailwind, CSS Modules
-
-Document findings - they inform the SPEC.json context.
+This informs SPEC.json `stack` and `verification_commands`.
 
 ---
 
