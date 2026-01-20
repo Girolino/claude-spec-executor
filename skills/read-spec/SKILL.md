@@ -22,42 +22,13 @@ This informs SPEC.json `stack` and `verification_commands`.
 
 ## Phase 2: Interview
 
-Read @SPEC.md thoroughly, then conduct an **in-depth interview** using `AskUserQuestion`.
+Read @SPEC.md and interview the user in detail using `AskUserQuestion`.
 
-### Interview Process
+Ask about literally anything: technical implementation, UI/UX, edge cases, tradeoffs, concerns, data flow, error handling—whatever isn't obvious from Phase 1 discovery.
 
-**CRITICAL**: Make **multiple sequential calls** to `AskUserQuestion`. Do NOT batch all questions into one call. After each response, analyze answers and ask follow-up questions.
+**Be very in-depth. Continue interviewing continually until you have complete clarity.** Don't stop after 1-2 rounds—keep asking follow-up questions based on their answers until there's nothing ambiguous left.
 
-Example flow:
-1. Ask about architecture/data model decisions → get response
-2. Ask follow-ups based on their answers → get response
-3. Ask about UI/UX specifics → get response
-4. Ask about edge cases based on what you learned → get response
-5. Continue until no ambiguity remains
-
-### Topics to Explore
-
-- Technical implementation decisions and tradeoffs
-- UI/UX details, interactions, animations, responsive behavior
-- Error handling and failure modes
-- Data flow and state management
-- Performance considerations
-- Security concerns
-- Edge cases and boundary conditions
-- Anything unclear or ambiguous in the spec
-
-### Interview Rules
-
-1. **Minimum 3-5 sequential AskUserQuestion calls** (not 1 call with multiple questions)
-2. **Follow-up on answers** - their responses should inform your next questions
-3. **Go deep, not wide** - probe specific areas thoroughly
-4. **Challenge assumptions** - ask "what if" and "have you considered" questions
-5. **Don't accept vague answers** - ask for specifics
-
-Also gather verification commands if not already known from discovery:
-- Build/typecheck, lint, dev server, test, db sync
-
-Skip only questions whose answers are obvious from Phase 1 discovery.
+Also confirm verification commands if not found in discovery (build, typecheck, lint, test, dev server, db sync).
 
 ---
 
