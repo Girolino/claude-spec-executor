@@ -24,16 +24,35 @@ This informs SPEC.json `stack` and `verification_commands`.
 
 Read @SPEC.md thoroughly, then conduct an **in-depth interview** using `AskUserQuestion`.
 
-Explore **all aspects** including but not limited to:
+### Interview Process
+
+**CRITICAL**: Make **multiple sequential calls** to `AskUserQuestion`. Do NOT batch all questions into one call. After each response, analyze answers and ask follow-up questions.
+
+Example flow:
+1. Ask about architecture/data model decisions → get response
+2. Ask follow-ups based on their answers → get response
+3. Ask about UI/UX specifics → get response
+4. Ask about edge cases based on what you learned → get response
+5. Continue until no ambiguity remains
+
+### Topics to Explore
+
 - Technical implementation decisions and tradeoffs
-- UI/UX details, interactions, edge cases
+- UI/UX details, interactions, animations, responsive behavior
 - Error handling and failure modes
 - Data flow and state management
 - Performance considerations
 - Security concerns
+- Edge cases and boundary conditions
 - Anything unclear or ambiguous in the spec
 
-**Interview until complete**: Continue asking questions until you have enough clarity to generate a detailed SPEC.json. Don't stop after 1-2 questions—a good interview typically has 5-10+ rounds.
+### Interview Rules
+
+1. **Minimum 3-5 sequential AskUserQuestion calls** (not 1 call with multiple questions)
+2. **Follow-up on answers** - their responses should inform your next questions
+3. **Go deep, not wide** - probe specific areas thoroughly
+4. **Challenge assumptions** - ask "what if" and "have you considered" questions
+5. **Don't accept vague answers** - ask for specifics
 
 Also gather verification commands if not already known from discovery:
 - Build/typecheck, lint, dev server, test, db sync
