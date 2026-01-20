@@ -22,16 +22,23 @@ This informs SPEC.json `stack` and `verification_commands`.
 
 ## Phase 2: Interview
 
-Read @SPEC.md and use `AskUserQuestion` to gather:
-1. Build/typecheck command
-2. Lint command
-3. Database sync command (if applicable)
-4. How to run dev server
-5. Test command (if applicable)
+Read @SPEC.md thoroughly, then conduct an **in-depth interview** using `AskUserQuestion`.
 
-Also clarify: technical implementation details, UI/UX decisions, edge cases.
+Explore **all aspects** including but not limited to:
+- Technical implementation decisions and tradeoffs
+- UI/UX details, interactions, edge cases
+- Error handling and failure modes
+- Data flow and state management
+- Performance considerations
+- Security concerns
+- Anything unclear or ambiguous in the spec
 
-Don't ask questions you can answer from discovery.
+**Interview until complete**: Continue asking questions until you have enough clarity to generate a detailed SPEC.json. Don't stop after 1-2 questions—a good interview typically has 5-10+ rounds.
+
+Also gather verification commands if not already known from discovery:
+- Build/typecheck, lint, dev server, test, db sync
+
+Skip only questions whose answers are obvious from Phase 1 discovery.
 
 ---
 
